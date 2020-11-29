@@ -51,6 +51,21 @@ public:
       res.set(http::header::content_type, "text/plain");
       res.body() = "who is " + path_args["who"] + "?";
       return;
+    } else if (rel_path == "/data"_path) {
+      // at first we need read body
+      req.read_body();
+      std::string body = std::move(req.body());
+
+      if (body.empty()) {
+        body = "print something to request body";
+      }
+
+
+      res.set(http::header::content_type, req[http::header::content_type]);
+      res.set(http::header::content_length, body.size());
+
+      res.body() = std::move(body);
+      return;
     }
 
     res.set(http::header::content_type, "application/x-www-form-urlencoded");
