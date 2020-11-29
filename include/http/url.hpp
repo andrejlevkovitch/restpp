@@ -119,6 +119,10 @@ inline url::path operator""_path(const char *str, size_t len) {
 inline url::path::signature operator""_psign(const char *str, size_t len) {
   return url::path::signature(std::string_view{str, len});
 }
+
+inline url::query::args operator""_query(const char *str, size_t len) {
+  return url::query::split(std::string_view{str, len});
+}
 } // namespace literals
 } // namespace http
 

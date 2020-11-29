@@ -7,6 +7,7 @@ project(restpp)
 
 include(cmake/build.cmake)
 include(cmake/doxygen.cmake)
+include(cmake/catch2_test_register.cmake)
 #include(cmake/version.cmake)
 
 
@@ -44,3 +45,8 @@ target_link_libraries(echo_service PRIVATE
   ${Boost_LIBRARIES}
   Threads::Threads
   )
+
+
+if(BUILD_TESTING)
+  add_subdirectory(test)
+endif()
