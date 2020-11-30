@@ -222,6 +222,8 @@ private:
           }
 
           if (service == nullptr) {
+            LOG_WARNING("service for %1% not found", target);
+
             res_->result(http::status::not_found);
             goto Send;
           }
@@ -251,6 +253,8 @@ private:
               service->handle(std::move(req), *res_);
             }
           } catch (std::exception &e) {
+            LOG_ERROR("catch exception from service: %1%", e.what());
+
             res_ = std::make_shared<http::response>();
             res_->version(version);
             res_->keep_alive(keep_alive);

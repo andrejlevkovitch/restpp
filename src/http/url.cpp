@@ -7,6 +7,16 @@
 #define MATCH_ALL ".*"
 
 
+const std::regex split_path_reg{"/"};
+const std::regex split_query_reg{R"(&)"};
+
+const std::regex path_from_url{R"(\/[^?]*)"};
+const std::regex query_from_url{R"(\?(.+))"};
+
+const std::regex smpl_value_reg{R"(^\w*$)"};
+const std::regex spec_value_reg{R"(^\<[^\>]+\>$)"};
+
+
 namespace http {
 url::path::path(std::string_view val)
     : path_{} {
@@ -18,11 +28,11 @@ url::path::path(std::string_view val)
     throw std::invalid_argument{"invalid path: path must starts with /"};
   }
 
-  const std::regex token_reg{"/"};
+
   for (auto iter =
            std::cregex_token_iterator{val.begin() + 1, // skip first shash
                                       val.end(),
-                                      token_reg,
+                                      split_path_reg,
                                       -1};
        iter != std::cregex_token_iterator{};
        ++iter) {
@@ -106,8 +116,6 @@ url::path::const_iterator url::path::end() const noexcept {
 
 
 url::path url::get_path(std::string_view target) noexcept {
-  const std::regex path_from_url{R"(\/[^?]*)"};
-
   std::cmatch match;
   if (std::regex_search(target.begin(), target.end(), match, path_from_url)) {
     return path{
@@ -119,8 +127,6 @@ url::path url::get_path(std::string_view target) noexcept {
 }
 
 std::string_view url::get_query(std::string_view target) noexcept {
-  const std::regex query_from_url{R"(\?(.+))"};
-
   std::cmatch match;
   if (std::regex_search(target.begin(), target.end(), match, query_from_url) &&
       match.size() >= 2) {
@@ -133,8 +139,6 @@ std::string_view url::get_query(std::string_view target) noexcept {
 
 
 url::query::args url::query::split(std::string_view query) noexcept {
-  const std::regex split_query_reg{R"(&)"};
-
   std::list<std::string> tokens;
   std::copy(std::cregex_token_iterator{query.begin(),
                                        query.end(),
@@ -159,9 +163,7 @@ url::query::args url::query::split(std::string_view query) noexcept {
 
 
 url::path_signature::path_signature(std::string_view signature) {
-  const std::regex smpl_value_reg{R"(^\w*$)"};
-  const std::regex spec_value_reg{R"(^\<[^\>]+\>$)"};
-  url::path        path = url::get_path(signature);
+  url::path path = url::get_path(signature);
 
   for (const auto &path_token : path) {
     path_token_matcher matcher;
