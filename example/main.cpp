@@ -17,13 +17,15 @@
 #include <simple_logs/logs.hpp>
 
 
-#define HELP_FLAG     "help"
-#define URL_FLAG      "url"
-#define VERBOSE_FLAG  "verbose"
-#define VERBOSE_SHORT "v"
+#define HELP_FLAG         "help"
+#define URL_FLAG          "url"
+#define THREAD_COUNT_FLAG "threads"
+#define VERBOSE_FLAG      "verbose"
+#define VERBOSE_SHORT     "v"
 
-#define DEFAULT_HOST "localhost"
-#define DEFAULT_PORT 8000
+#define DEFAULT_HOST         "localhost"
+#define DEFAULT_PORT         8000
+#define DEFAULT_THREAD_COUNT 1
 
 
 void sigsegv_handler([[maybe_unused]] int signal) {
@@ -92,6 +94,7 @@ int main(int argc, char *argv[]) {
   desc.add_options()
     (HELP_FLAG, "print description")
     (URL_FLAG, po::value<std::string>()->default_value("http://" DEFAULT_HOST ":" + std::to_string(DEFAULT_PORT)), "url for the service")
+    (THREAD_COUNT_FLAG, po::value<ushort>()->default_value(DEFAULT_THREAD_COUNT), "count of started threads")
     (VERBOSE_FLAG "," VERBOSE_SHORT, "show more logs");
   // clang-format on
 
@@ -133,9 +136,11 @@ int main(int argc, char *argv[]) {
   }
 
 
-  std::string server_uri = args[URL_FLAG].as<std::string>();
+  std::string server_uri   = args[URL_FLAG].as<std::string>();
+  ushort      thread_count = args[THREAD_COUNT_FLAG].as<ushort>();
 
-  LOG_INFO("server uri:      %1%", server_uri);
+  LOG_INFO("server uri:       %1%", server_uri);
+  LOG_INFO("count of threads: %1%", thread_count);
 
 
   asio::io_context io_context;
@@ -162,8 +167,19 @@ int main(int argc, char *argv[]) {
   });
 
 
+  std::vector<std::thread> threads;
+  for (int i = 0; i < thread_count - 1; ++i) {
+    threads.emplace_back([&io_context]() {
+      io_context.run();
+    });
+  }
+
   io_context.run();
   LOG_INFO("exit");
+
+  for (std::thread &thread : threads) {
+    thread.join();
+  }
 
   return EXIT_SUCCESS;
 }
