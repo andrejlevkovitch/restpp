@@ -161,8 +161,7 @@ private:
               return reqParser_->get(); // nothing to read
             }
 
-            size_t trans =
-                beast::http::read_some(socket_, reqBuffer_, *reqParser_);
+            size_t trans = beast::http::read(socket_, reqBuffer_, *reqParser_);
 
             LOG_DEBUG("readed body: %1.3fKb", trans / 1024.);
 
@@ -170,9 +169,7 @@ private:
           };
 
           // write headers callback
-          bool is_headers_writed      = false;
-          auto write_headers_callback = [this, &is_headers_writed]() {
-            is_headers_writed = true;
+          auto write_headers_callback = [this]() {
             if (resSerializer_->is_done()) {
               return; // nothing to write
             }
@@ -181,14 +178,12 @@ private:
 
             LOG_DEBUG("writed headers: %1.3fKb", trans / 1024.);
           };
-          bool is_body_writed      = false;
-          auto write_body_callback = [this, &is_body_writed]() {
-            is_body_writed = true;
+          auto write_body_callback = [this]() {
             if (resSerializer_->is_done()) {
               return; // nothing to write
             }
 
-            size_t trans = beast::http::write_some(socket_, *resSerializer_);
+            size_t trans = beast::http::write(socket_, *resSerializer_);
 
             LOG_DEBUG("writed body: %1.3fKb", trans / 1024.);
           };
@@ -265,7 +260,7 @@ private:
 
         Send:
           if (reqParser_->is_done() == false) {
-            // TODO we can just skeep we body?
+            // TODO we can just skeep the body?
             auto skip = [](error_code e, size_t trans) {
               if (e.failed()) {
                 LOG_ERROR("error while skipping body: %1%", e.message());
@@ -273,26 +268,22 @@ private:
               }
               LOG_DEBUG("skipped body: %1.3fKb", trans / 1024.);
             };
-            beast::http::async_read_some(socket_,
-                                         reqBuffer_,
-                                         *reqParser_,
-                                         asio::bind_executor(strand_, skip));
+            beast::http::async_read(socket_,
+                                    reqBuffer_,
+                                    *reqParser_,
+                                    asio::bind_executor(strand_, skip));
           }
 
           if (resSerializer_
                   ->is_done()) { // in this case we don't need write anything
-            continue;
+            goto PostWriting;
+          } else if (resSerializer_->split() == false) {
+            res_->prepare_payload();
           }
-          if (resSerializer_->split()) { // in this case we need write only body
-            goto WriteBody;
-          }
-
-          // write complete response
-          res_->prepare_payload();
         }
 
 
-        yield beast::http::async_write_header(
+        yield beast::http::async_write(
             socket_,
             *resSerializer_,
             asio::bind_executor(strand_,
@@ -302,21 +293,10 @@ private:
                                           std::placeholders::_1,
                                           std::placeholders::_2)));
 
-        LOG_DEBUG("writed headers: %1.3fKb", transfered / 1024.);
+        LOG_DEBUG("writed response: %1.3fKb", transfered / 1024.);
 
-      WriteBody:
-        yield beast::http::async_write_some(
-            socket_,
-            *resSerializer_,
-            asio::bind_executor(strand_,
-                                std::bind(&session::operator(),
-                                          this,
-                                          std::move(self_),
-                                          std::placeholders::_1,
-                                          std::placeholders::_2)));
 
-        LOG_DEBUG("writed body: %1.3fKb", transfered / 1024.);
-
+      PostWriting:
         // handle eof semantic
         if (res_->need_eof()) {
           this->operator()(std::move(self_),
