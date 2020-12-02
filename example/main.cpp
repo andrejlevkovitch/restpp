@@ -37,23 +37,47 @@ void sigsegv_handler([[maybe_unused]] int signal) {
 
 class echo_service final : public http::service {
 public:
-  void handle(http::request req, OUTPUT http::response &res) {
+  void handle(http::request, OUTPUT http::response &res) override {
+    res.result(http::status::not_found);
+    return;
+  }
+
+  void handleGET(http::request req, OUTPUT http::response &res) override {
     using namespace http::literals;
 
-    http::url::path::signature::args path_args;
-    http::url::path rel_path = http::url::get_path(req.relative());
+    LOG_INFO("request to: %1%", req.relative());
 
-    LOG_INFO("request to: %1%", rel_path);
+
+    http::url::path rel_path = http::url::get_path(req.relative());
 
     if (rel_path == "/"_path) {
       res.set(http::header::content_type, "text/plain");
       res.body() = "print something to url path";
       return;
-    } else if ("/hello/<who>"_psign.match(rel_path, path_args)) {
+    } else if (http::url::path::signature::args path_args;
+               "/hello/<who>"_psign.match(
+                   rel_path,
+                   path_args)) { // sample of usage path arguments
       res.set(http::header::content_type, "text/plain");
       res.body() = "who is " + path_args["who"] + "?";
       return;
-    } else if (rel_path == "/data"_path) {
+    }
+
+
+    // default
+    res.set(http::header::content_type, "application/x-www-form-urlencoded");
+    res.body() = req.relative();
+  }
+
+  void handlePOST(http::request req, OUTPUT http::response &res) override {
+    using namespace http::literals;
+
+    LOG_INFO("request to: %1%", req.relative());
+
+
+    http::url::path rel_path = http::url::get_path(req.relative());
+
+    if (rel_path == "/data"_path) {
       // at first we need read body
       req.read_body();
       std::string body = std::move(req.body());
@@ -70,8 +94,9 @@ public:
       return;
     }
 
-    res.set(http::header::content_type, "application/x-www-form-urlencoded");
-    res.body() = rel_path;
+
+    // default
+    res.result(http::status::not_found);
   }
 };
 

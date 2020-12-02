@@ -178,7 +178,7 @@ private:
 
             LOG_DEBUG("writed headers: %1.3fKb", trans / 1024.);
           };
-          auto write_body_callback = [this]() {
+          auto write_callback = [this]() {
             if (resSerializer_->is_done()) {
               return; // nothing to write
             }
@@ -193,7 +193,7 @@ private:
           req.read_body_callback_ = read_body_callback;
 
           res_->write_headers_callback_ = write_headers_callback;
-          res_->write_body_callback_    = write_body_callback;
+          res_->write_callback_         = write_callback;
 
 
           unsigned int version    = req.version();
