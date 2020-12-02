@@ -5,6 +5,7 @@
 #include "http/response.hpp"
 #include "http/service.hpp"
 #include "http/url.hpp"
+#include <atomic>
 #include <boost/asio/bind_executor.hpp>
 #include <boost/asio/coroutine.hpp>
 #include <boost/asio/ip/tcp.hpp>
@@ -51,6 +52,7 @@ public:
   session(socket sock, service_list services) noexcept
       : socket_{std::move(sock)}
       , strand_{sock.get_executor()}
+      , is_open_{true}
       , services_{services} {
     LOG_TRACE("construct session");
   }
@@ -72,7 +74,7 @@ public:
   }
 
   void close() noexcept {
-    if (socket_.is_open() == false) {
+    if (is_open_ == false) {
       LOG_WARNING("session already closed");
       return;
     }
@@ -93,6 +95,8 @@ public:
   void atClose() noexcept {
     LOG_TRACE("at session close");
 
+    is_open_ = false;
+
     error_code err;
     socket_.shutdown(socket::shutdown_both, err);
     if (err.failed()) {
@@ -110,7 +114,7 @@ public:
   }
 
   bool isOpen() const noexcept {
-    return socket_.is_open();
+    return is_open_;
   }
 
 private:
@@ -309,8 +313,10 @@ private:
   }
 
 private:
-  socket                               socket_;
-  strand                               strand_;
+  socket           socket_;
+  strand           strand_;
+  std::atomic_bool is_open_;
+
   request_buffer                       reqBuffer_;
   std::shared_ptr<request_parser>      reqParser_;
   std::shared_ptr<response_serializer> resSerializer_;
