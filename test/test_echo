@@ -1,13 +1,12 @@
 #!/bin/bash
 
-trap "exit" INT TERM ERR
-trap "kill 0" EXIT
-
 SERVER="${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/echo_service"
 URL="http://localhost:8011/echo"
+LOG_FILE="echo.log"
 THREAD_COUNT=4
 
-$SERVER --url $URL --threads $THREAD_COUNT > /dev/null &
+$SERVER --url $URL --threads $THREAD_COUNT &>$LOG_FILE &
+SERVER_PID=$!
 
 # wait for server start
 sleep 2
@@ -21,5 +20,5 @@ $WRK_EXE -t8 -c16 -d1m -s $WRK_SCRIPT --timeout 10s $URL
 
 
 # and stop the server
-kill 0
+kill -s INT $SERVER_PID
 wait

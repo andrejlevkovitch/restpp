@@ -4,7 +4,7 @@ catch2_test_register(test_url url.cpp)
 
 
 set(ECHO_STRESS_WRK_SCRIPT ${CMAKE_CURRENT_LIST_DIR}/stress_echo.lua)
-configure_file(${CMAKE_CURRENT_LIST_DIR}/test_echo ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
+configure_file(${CMAKE_CURRENT_LIST_DIR}/test_echo ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/test_echo)
 
 add_test(
   NAME              test_echo
