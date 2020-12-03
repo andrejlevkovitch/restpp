@@ -2,8 +2,8 @@
 
 #pragma once
 
-#include "misc.hpp"
 #include <functional>
+#include <http/misc.hpp>
 #include <list>
 #include <map>
 #include <ostream>
@@ -128,7 +128,7 @@ inline url::query::args operator""_query(const char *str, size_t len) {
 
 
 namespace std {
-inline ostream &operator<<(ostream &out, http::url::path path) {
+inline ostream &operator<<(ostream &out, const http::url::path &path) {
   out << std::string{path};
   return out;
 }

@@ -2,13 +2,11 @@
 
 #pragma once
 
-#include <boost/beast/http/field.hpp>
-#include <boost/beast/http/status.hpp>
-#include <boost/beast/http/verb.hpp>
-
-
-namespace http {
-using status = boost::beast::http::status;
-using verb   = boost::beast::http::verb;
-using header = boost::beast::http::field;
-} // namespace http
+#include <http/header.hpp>
+#include <http/request.hpp>
+#include <http/response.hpp>
+#include <http/server.hpp>
+#include <http/service.hpp>
+#include <http/status.hpp>
+#include <http/url.hpp>
+#include <http/verb.hpp>
