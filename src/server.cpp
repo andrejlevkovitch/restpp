@@ -48,7 +48,7 @@ public:
   using strand       = asio::strand<asio::io_context::executor_type>;
   using service_list = std::list<std::pair<http::url::path, service_ptr>>;
 
-  // TODO what to do with handler?
+
   session(socket sock, service_list services) noexcept
       : socket_{std::move(sock)}
       , strand_{sock.get_executor()}
@@ -200,6 +200,7 @@ private:
           res_->write_callback_         = write_callback;
 
 
+          // set default behaviour of response
           unsigned int version    = req.version();
           bool         keep_alive = req.keep_alive();
 
@@ -207,6 +208,7 @@ private:
           res_->keep_alive(keep_alive);
 
 
+          // find service for handling
           std::string_view target = misc::string_view_cast(req.target());
 
           const http::url::path path{http::url::get_path(target)};
@@ -224,10 +226,11 @@ private:
             LOG_WARNING("service for %1% not found", target);
 
             res_->result(http::status::not_found);
-            goto Send;
+            goto PreWriting;
           }
 
 
+          // handle request
           try {
             switch (req.method()) {
             case http::verb::get:
@@ -254,15 +257,17 @@ private:
           } catch (std::exception &e) {
             LOG_ERROR("catch exception from service: %1%", e.what());
 
+            // reinitialize the response, because there can be invalid values
+            // after exception
             res_ = std::make_shared<http::response>();
             res_->version(version);
             res_->keep_alive(keep_alive);
             res_->result(http::status::internal_server_error);
-            goto Send;
           }
 
 
-        Send:
+        PreWriting:
+          // skip request body if it was set and didn't read
           if (reqParser_->is_done() == false) {
             // TODO we can just skeep the body?
             auto skip = [](error_code e, size_t trans) {
@@ -278,8 +283,7 @@ private:
                                     asio::bind_executor(strand_, skip));
           }
 
-          if (resSerializer_
-                  ->is_done()) { // in this case we don't need write anything
+          if (resSerializer_->is_done()) { // in this case body already writed
             goto PostWriting;
           } else if (resSerializer_->split() == false) {
             res_->prepare_payload();
