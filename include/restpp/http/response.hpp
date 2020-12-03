@@ -6,9 +6,11 @@
 #include <boost/beast/http/string_body.hpp>
 
 
-namespace http {
+namespace restpp {
 class session;
+}
 
+namespace restpp::http {
 /**\
  * \note you should not use write_headers or write method. Response writes
  * automaticly to client after finishing handling
@@ -55,4 +57,4 @@ private:
   std::function<void()> write_headers_callback_;
   std::function<void()> write_callback_;
 };
-} // namespace http
+} // namespace restpp::http

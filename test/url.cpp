@@ -5,8 +5,9 @@
 
 //
 
-#include "http/url.hpp"
+#include "restpp/http/url.hpp"
 
+namespace http = restpp::http;
 using namespace http::literals;
 
 

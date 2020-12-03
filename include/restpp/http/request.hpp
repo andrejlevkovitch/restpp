@@ -4,12 +4,14 @@
 
 #include <boost/beast/http/message.hpp>
 #include <boost/beast/http/string_body.hpp>
-#include <http/misc.hpp>
+#include <restpp/misc.hpp>
 
 
-namespace http {
+namespace restpp {
 class session;
+}
 
+namespace restpp::http {
 class request
     : public boost::beast::http::request<boost::beast::http::string_body> {
   friend session;
@@ -59,4 +61,4 @@ private:
   std::function<request::message()> read_body_callback_;
   std::string                       root_;
 };
-} // namespace http
+} // namespace restpp::http

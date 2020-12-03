@@ -1,6 +1,6 @@
 // url.cpp
 
-#include "http/url.hpp"
+#include "restpp/http/url.hpp"
 #include <regex>
 #include <sstream>
 
@@ -17,7 +17,7 @@ const std::regex smpl_value_reg{R"(^\w*$)"};
 const std::regex spec_value_reg{R"(^\<[^\>]+\>$)"};
 
 
-namespace http {
+namespace restpp::http {
 url::path::path(std::string_view val)
     : path_{} {
   if (val.empty() || val == "/") {
@@ -252,4 +252,4 @@ bool url::path_signature::operator==(const url::path &path) const noexcept {
 bool operator==(const url::path &path, const url::path::signature &signature) {
   return signature == path;
 }
-} // namespace http
+} // namespace restpp::http

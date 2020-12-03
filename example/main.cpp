@@ -1,6 +1,8 @@
 // main.cpp
 
-#include "http.hpp"
+#include "restpp/http.hpp"
+#include "restpp/server.hpp"
+#include "restpp/service.hpp"
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/signal_set.hpp>
 #include <boost/program_options/options_description.hpp>
@@ -32,7 +34,10 @@ void sigsegv_handler([[maybe_unused]] int signal) {
 }
 
 
-class echo_service final : public http::service {
+namespace http = restpp::http;
+namespace asio = boost::asio;
+
+class echo_service final : public restpp::service {
 public:
   void handle(http::request, OUTPUT http::response &res) override {
     res.result(http::status::not_found);
@@ -97,9 +102,9 @@ public:
   }
 };
 
-class echo_serviceFactory final : public http::service_factory {
+class echo_serviceFactory final : public restpp::service_factory {
 public:
-  http::service_ptr make_service() {
+  restpp::service_ptr make_service() {
     return std::make_shared<echo_service>();
   }
 };
@@ -167,14 +172,14 @@ int main(int argc, char *argv[]) {
 
   asio::io_context io_context;
 
-  http::server_builder server_builder{io_context};
+  restpp::server_builder server_builder{io_context};
   server_builder.set_uri(server_uri);
   server_builder.add_service(std::make_shared<echo_serviceFactory>(), "/");
 
 
   // start the server
   LOG_INFO("start server");
-  http::server server = server_builder.build();
+  restpp::server server = server_builder.build();
   server.asyncRun();
 
 

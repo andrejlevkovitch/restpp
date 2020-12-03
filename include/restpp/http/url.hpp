@@ -3,14 +3,14 @@
 #pragma once
 
 #include <functional>
-#include <http/misc.hpp>
 #include <list>
 #include <map>
 #include <ostream>
+#include <restpp/misc.hpp>
 #include <string>
 
 
-namespace http {
+namespace restpp::http {
 class url {
 public:
   class path;
@@ -124,11 +124,11 @@ inline url::query::args operator""_query(const char *str, size_t len) {
   return url::query::split(std::string_view{str, len});
 }
 } // namespace literals
-} // namespace http
+} // namespace restpp::http
 
 
 namespace std {
-inline ostream &operator<<(ostream &out, const http::url::path &path) {
+inline ostream &operator<<(ostream &out, const restpp::http::url::path &path) {
   out << std::string{path};
   return out;
 }

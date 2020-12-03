@@ -2,13 +2,13 @@
 
 #pragma once
 
-#include <http/misc.hpp>
-#include <http/request.hpp>
-#include <http/response.hpp>
 #include <memory>
+#include <restpp/http/request.hpp>
+#include <restpp/http/response.hpp>
+#include <restpp/misc.hpp>
 
 
-namespace http {
+namespace restpp {
 /**\brief service handles requests for some path
  * \note that service should be lightweight and fast constuctible, because it
  * creates for every session
@@ -31,13 +31,19 @@ public:
   virtual void at_session_close() noexcept {};
 
 
-  virtual void handle(request req, OUTPUT response &res) = 0;
-  virtual void handleGET(request req, OUTPUT response &res) DEFAULT_HANDLER;
-  virtual void handleHEAD(request req, OUTPUT response &res) DEFAULT_HANDLER;
-  virtual void handlePUT(request req, OUTPUT response &res) DEFAULT_HANDLER;
-  virtual void handlePOST(request req, OUTPUT response &res) DEFAULT_HANDLER;
-  virtual void handlePATCH(request req, OUTPUT response &res) DEFAULT_HANDLER;
-  virtual void handleDELETE(request req, OUTPUT response &res) DEFAULT_HANDLER;
+  virtual void handle(http::request req, OUTPUT http::response &res) = 0;
+  virtual void handleGET(http::request req,
+                         OUTPUT http::response &res) DEFAULT_HANDLER;
+  virtual void handleHEAD(http::request req,
+                          OUTPUT http::response &res) DEFAULT_HANDLER;
+  virtual void handlePUT(http::request req,
+                         OUTPUT http::response &res) DEFAULT_HANDLER;
+  virtual void handlePOST(http::request req,
+                          OUTPUT http::response &res) DEFAULT_HANDLER;
+  virtual void handlePATCH(http::request req,
+                           OUTPUT http::response &res) DEFAULT_HANDLER;
+  virtual void handleDELETE(http::request req,
+                            OUTPUT http::response &res) DEFAULT_HANDLER;
 };
 
 using service_ptr = std::shared_ptr<service>;
@@ -54,4 +60,4 @@ public:
 };
 
 using service_factory_ptr = std::shared_ptr<service_factory>;
-} // namespace http
+} // namespace restpp

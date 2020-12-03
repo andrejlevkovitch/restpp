@@ -5,6 +5,6 @@
 #include <boost/beast/http/field.hpp>
 
 
-namespace http {
+namespace restpp::http {
 using header = boost::beast::http::field;
 }

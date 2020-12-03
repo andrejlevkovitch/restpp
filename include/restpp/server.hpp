@@ -7,9 +7,9 @@
 #include <memory>
 
 
+namespace restpp {
 namespace asio = boost::asio;
 
-namespace http {
 class server_impl;
 class server_builder;
 class service_factory;
@@ -46,4 +46,4 @@ private:
   std::string          root_;
   service_factory_list service_factories_;
 };
-} // namespace http
+} // namespace restpp

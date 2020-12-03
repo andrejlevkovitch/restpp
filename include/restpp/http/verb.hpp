@@ -3,10 +3,10 @@
 #pragma once
 
 #include <boost/beast/http/verb.hpp>
-#include <http/misc.hpp>
+#include <restpp/misc.hpp>
 
 
-namespace http {
+namespace restpp::http {
 using verb = boost::beast::http::verb;
 
 inline verb string_to_verb(std::string_view method) {
@@ -20,4 +20,4 @@ inline verb operator""_verb(const char *str, size_t len) {
   return string_to_verb(std::string_view{str, len});
 }
 } // namespace literals
-} // namespace http
+} // namespace restpp::http

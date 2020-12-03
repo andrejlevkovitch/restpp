@@ -1,10 +1,12 @@
 // server.cpp
 
-#include "http/server.hpp"
-#include "http/request.hpp"
-#include "http/response.hpp"
-#include "http/service.hpp"
-#include "http/url.hpp"
+#include "restpp/server.hpp"
+#include "restpp/http/request.hpp"
+#include "restpp/http/response.hpp"
+#include "restpp/http/status.hpp"
+#include "restpp/http/url.hpp"
+#include "restpp/http/verb.hpp"
+#include "restpp/service.hpp"
 #include <atomic>
 #include <boost/asio/bind_executor.hpp>
 #include <boost/asio/coroutine.hpp>
@@ -25,14 +27,12 @@
 #include <boost/asio/yield.hpp>
 
 
-namespace http {
+namespace restpp {
 namespace asio   = boost::asio;
 using tcp        = asio::ip::tcp;
 using error_code = boost::system::error_code;
 
 namespace beast = boost::beast;
-using status    = beast::http::status;
-using verb      = beast::http::verb;
 
 
 class session final
@@ -46,7 +46,7 @@ public:
   using response_serializer =
       beast::http::response_serializer<beast::http::string_body>;
   using strand       = asio::strand<asio::io_context::executor_type>;
-  using service_list = std::list<std::pair<url::path, service_ptr>>;
+  using service_list = std::list<std::pair<http::url::path, service_ptr>>;
 
   // TODO what to do with handler?
   session(socket sock, service_list services) noexcept
@@ -156,7 +156,7 @@ private:
 
         // request handling
         // new response
-        res_           = std::make_shared<response>();
+        res_           = std::make_shared<http::response>();
         resSerializer_ = std::make_shared<response_serializer>(*res_);
         {
           // read body callback
@@ -193,7 +193,7 @@ private:
           };
 
 
-          request req             = reqParser_->get();
+          http::request req       = reqParser_->get();
           req.read_body_callback_ = read_body_callback;
 
           res_->write_headers_callback_ = write_headers_callback;
@@ -209,8 +209,8 @@ private:
 
           std::string_view target = misc::string_view_cast(req.target());
 
-          const url::path path = url::get_path(target);
-          service_ptr     service;
+          const http::url::path path = http::url::get_path(target);
+          service_ptr           service;
           for (const auto &[root, srv] : services_) {
             if (root.is_base_of(path)) {
               service = srv;
@@ -320,7 +320,7 @@ private:
   request_buffer                       reqBuffer_;
   std::shared_ptr<request_parser>      reqParser_;
   std::shared_ptr<response_serializer> resSerializer_;
-  std::shared_ptr<response>            res_;
+  std::shared_ptr<http::response>      res_;
 
   service_list services_;
 };
@@ -421,13 +421,13 @@ private:
 
           session::service_list services;
           for (const auto &[path, service_factory] : service_factories_) {
-            services.emplace_back(url::path{path},
+            services.emplace_back(http::url::path{path},
                                   service_factory->make_service());
           }
 
 
           session_ptr session =
-              std::make_shared<http::session>(std::move(sock), services);
+              std::make_shared<restpp::session>(std::move(sock), services);
 
 
           session->start();
@@ -511,8 +511,8 @@ server server_builder::build() const {
 
   service_factory_list service_factories;
   for (const auto &[relative, factory] : service_factories_) {
-    url::path root_path{root};
-    url::path relative_path{relative};
+    http::url::path root_path{root};
+    http::url::path relative_path{relative};
 
     service_factories.emplace_back(root_path / relative_path, factory);
   }
@@ -526,4 +526,4 @@ server server_builder::build() const {
 
   return retval;
 }
-} // namespace http
+} // namespace restpp

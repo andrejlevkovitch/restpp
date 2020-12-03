@@ -4,6 +4,6 @@
 
 #include <boost/beast/http/status.hpp>
 
-namespace http {
+namespace restpp::http {
 using status = boost::beast::http::status;
 }
