@@ -8,7 +8,10 @@ project(restpp)
 include(cmake/build.cmake)
 include(cmake/doxygen.cmake)
 include(cmake/catch2_test_register.cmake)
-#include(cmake/version.cmake)
+include(cmake/version.cmake)
+
+
+message(STATUS "restpp version: ${PROJECT_VERSION}")
 
 
 add_subdirectory(third-party)
