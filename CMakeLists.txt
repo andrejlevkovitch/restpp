@@ -17,8 +17,8 @@ find_package(Boost COMPONENTS program_options stacktrace_backtrace REQUIRED)
 
 
 set(PROJECT_SRC
+  src/server.cpp
   src/http/url.cpp
-  src/http/server.cpp
   )
 
 add_library(${PROJECT_NAME} ${PROJECT_SRC})
