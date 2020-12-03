@@ -42,6 +42,7 @@ url::path::path(std::string_view val)
   }
 }
 
+
 bool url::path::empty() const noexcept {
   return path_.empty();
 }
@@ -115,12 +116,11 @@ url::path::const_iterator url::path::end() const noexcept {
 }
 
 
-url::path url::get_path(std::string_view target) noexcept {
+std::string_view url::get_path(std::string_view target) noexcept {
   std::cmatch match;
   if (std::regex_search(target.begin(), target.end(), match, path_from_url)) {
-    return path{
-        std::string_view(match[0].first,
-                         std::distance(match[0].first, match[0].second))};
+    return std::string_view(match[0].first,
+                            std::distance(match[0].first, match[0].second));
   }
 
   return {};
@@ -135,6 +135,11 @@ std::string_view url::get_query(std::string_view target) noexcept {
   }
 
   return {};
+}
+
+std::pair<std::string_view, std::string_view>
+url::split(std::string_view url) noexcept {
+  return {url::get_path(url), url::get_query(url)};
 }
 
 
@@ -163,7 +168,7 @@ url::query::args url::query::split(std::string_view query) noexcept {
 
 
 url::path_signature::path_signature(std::string_view signature) {
-  url::path path = url::get_path(signature);
+  url::path path{signature};
 
   for (const auto &path_token : path) {
     path_token_matcher matcher;

@@ -50,7 +50,7 @@ public:
     LOG_INFO("request to: %1%", req.relative());
 
 
-    http::url::path rel_path = http::url::get_path(req.relative());
+    http::url::path rel_path{http::url::get_path(req.relative())};
 
     if (rel_path == "/"_path) {
       res.set(http::header::content_type, "text/plain");
@@ -77,7 +77,7 @@ public:
     LOG_INFO("request to: %1%", req.relative());
 
 
-    http::url::path rel_path = http::url::get_path(req.relative());
+    http::url::path rel_path{http::url::get_path(req.relative())};
 
     if (rel_path == "/data"_path) {
       // at first we need read body

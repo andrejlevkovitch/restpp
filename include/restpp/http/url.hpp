@@ -98,8 +98,13 @@ public:
   };
 
 
-  static path             get_path(std::string_view url) noexcept;
+  static std::string_view get_path(std::string_view url) noexcept;
   static std::string_view get_query(std::string_view url) noexcept;
+
+  /**\return path and query from the url
+   */
+  static std::pair<std::string_view, std::string_view>
+  split(std::string_view url) noexcept;
 
 
   class query {

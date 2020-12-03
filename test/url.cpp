@@ -13,11 +13,13 @@ using namespace http::literals;
 
 TEST_CASE("url", "[url]") {
   SECTION("getting path") {
-    CHECK(http::url::get_path("") == "/"_path);
-    CHECK(http::url::get_path("/") == "/"_path);
+    CHECK(http::url::path{http::url::get_path("")} == "/"_path);
+    CHECK(http::url::path{http::url::get_path("/")} == "/"_path);
 
-    CHECK(http::url::get_path("/some/path") == "/some/path"_path);
-    CHECK(http::url::get_path("/some/path?with=args") == "/some/path"_path);
+    CHECK(http::url::path{http::url::get_path("/some/path")} ==
+          "/some/path"_path);
+    CHECK(http::url::path{http::url::get_path("/some/path?with=args")} ==
+          "/some/path"_path);
   }
 
   SECTION("getting args") {

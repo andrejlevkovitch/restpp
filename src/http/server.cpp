@@ -209,7 +209,7 @@ private:
 
           std::string_view target = misc::string_view_cast(req.target());
 
-          const http::url::path path = http::url::get_path(target);
+          const http::url::path path{http::url::get_path(target)};
           service_ptr           service;
           for (const auto &[root, srv] : services_) {
             if (root.is_base_of(path)) {

@@ -49,6 +49,10 @@ public:
     read_body_callback_ = nullptr;
   }
 
+  std::string_view target() const noexcept {
+    return misc::string_view_cast(message::target());
+  }
+
   std::string_view relative() const noexcept {
     return misc::string_view_cast(this->target().substr(root_.size()));
   }
@@ -56,6 +60,9 @@ public:
   std::string_view root() const noexcept {
     return root_;
   }
+
+protected:
+  using message::target;
 
 private:
   std::function<request::message()> read_body_callback_;
