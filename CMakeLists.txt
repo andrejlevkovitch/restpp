@@ -2,13 +2,20 @@
 
 cmake_minimum_required(VERSION 3.12)
 
+if(PROJECT_NAME)
+  set(IS_SUBPROJECT TRUE)
+endif()
+
 project(restpp)
 
 
-include(cmake/build.cmake)
 include(cmake/doxygen.cmake)
-include(cmake/catch2_test_register.cmake)
 include(cmake/version.cmake)
+include(cmake/catch2_test_register.cmake)
+
+if(NOT IS_SUBPROJECT)
+  include(cmake/build.cmake)
+endif()
 
 
 message(STATUS "restpp version: ${PROJECT_VERSION}")
