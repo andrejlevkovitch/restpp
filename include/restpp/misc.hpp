@@ -5,6 +5,7 @@
 #include <string_view>
 
 #define OUTPUT
+#define DEAD_BEAF(ptr) ptr = reinterpret_cast<decltype(ptr)>(0xdeadbeaf);
 
 
 namespace restpp::misc {

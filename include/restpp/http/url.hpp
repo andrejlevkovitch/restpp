@@ -2,7 +2,6 @@
 
 #pragma once
 
-#include <functional>
 #include <list>
 #include <map>
 #include <ostream>
@@ -30,15 +29,17 @@ public:
 
 private:
   class path_signature {
-    using str_pair = std::pair<std::string, std::string>;
-    using path_token_matcher =
-        std::function<bool(std::string_view, std::optional<str_pair> &)>;
-    using matcher_list = std::list<path_token_matcher>;
-
   public:
+    class path_signature_impl;
     using args = url::args;
 
     explicit path_signature(std::string_view signature);
+    ~path_signature();
+
+    path_signature(const path_signature &rhs);
+    path_signature(path_signature &&rhs);
+    path_signature &operator=(const path_signature &rhs);
+    path_signature &operator=(path_signature &&rhs);
 
     /**\brief check that path matches the signature
      * \note that new arguments will be added to existed in args
@@ -46,9 +47,13 @@ private:
     bool match(const url::path &path, OUTPUT args &args) const noexcept;
     bool operator==(const url::path &path) const noexcept;
 
+    /**\return path_signature that match any path
+     */
+    static path_signature any();
+
 
   private:
-    matcher_list matchers_;
+    path_signature_impl *impl_;
   };
 
 public:

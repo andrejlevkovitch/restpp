@@ -18,6 +18,12 @@ const std::regex spec_value_reg{R"(^\<[^\>]+\>$)"};
 
 
 namespace restpp::http {
+using str_pair = std::pair<std::string, std::string>;
+using path_token_matcher =
+    std::function<bool(std::string_view, std::optional<str_pair> &)>;
+using matcher_list = std::list<path_token_matcher>;
+
+
 url::path::path(std::string_view val)
     : path_{} {
   if (val.empty() || val == "/") {
@@ -167,91 +173,155 @@ url::query::args url::query::split(std::string_view query) noexcept {
 }
 
 
-url::path_signature::path_signature(std::string_view signature) {
-  url::path path{signature};
+class url::path_signature::path_signature_impl {
+public:
+  virtual ~path_signature_impl() = default;
 
-  for (const auto &path_token : path) {
-    path_token_matcher matcher;
-    if (std::regex_match(path_token, spec_value_reg)) {
-      // at first split the special value on key and reg
-      std::string key;
-      std::regex  reg;
+  path_signature_impl(std::string_view signature) {
+    url::path path{signature};
 
-      if (auto found = std::find(path_token.begin(), path_token.end(), '=');
-          found != path_token.end()) {
-        key = std::string{std::next(path_token.begin()), found};
-        reg = std::string{found + 1, std::prev(path_token.end())};
-      } else {
-        key = path_token.substr(1, path_token.size() - 2);
-        reg = MATCH_ALL;
+    for (const auto &path_token : path) {
+      path_token_matcher matcher;
+      if (std::regex_match(path_token, spec_value_reg)) {
+        // at first split the special value on key and reg
+        std::string key;
+        std::regex  reg;
+
+        if (auto found = std::find(path_token.begin(), path_token.end(), '=');
+            found != path_token.end()) {
+          key = std::string{std::next(path_token.begin()), found};
+          reg = std::string{found + 1, std::prev(path_token.end())};
+        } else {
+          key = path_token.substr(1, path_token.size() - 2);
+          reg = MATCH_ALL;
+        }
+
+
+        matcher = [key, reg](std::string_view         token,
+                             std::optional<str_pair> &spec) {
+          std::cmatch match;
+          bool ok = std::regex_match(token.begin(), token.end(), match, reg);
+          if (ok) {
+            std::string val;
+            if (match.size() > 1) { // return first capture
+              val = std::string{match[1].first, match[1].second};
+            } else { // return all match
+              val = token;
+            }
+
+            spec.emplace(key, std::move(val));
+          }
+          return ok;
+        };
+      } else if (std::regex_match(path_token, smpl_value_reg)) { // full match
+        matcher = [path_token](std::string_view                          input,
+                               [[maybe_unused]] std::optional<str_pair> &spec) {
+          return input == path_token;
+        };
+      } else { // so, this token is wrong, because it don't match special and
+               // simple values
+        std::invalid_argument{"invalid path token: " + path_token};
       }
 
+      matchers_.emplace_back(matcher);
+    }
+  }
 
-      matcher = [key, reg](std::string_view         token,
-                           std::optional<str_pair> &spec) {
-        std::cmatch match;
-        bool ok = std::regex_match(token.begin(), token.end(), match, reg);
-        if (ok) {
-          std::string val;
-          if (match.size() > 1) { // return first capture
-            val = std::string{match[1].first, match[1].second};
-          } else { // return all match
-            val = token;
-          }
-
-          spec.emplace(key, std::move(val));
-        }
-        return ok;
-      };
-    } else if (std::regex_match(path_token, smpl_value_reg)) { // full match
-      matcher = [path_token](std::string_view                          input,
-                             [[maybe_unused]] std::optional<str_pair> &spec) {
-        return input == path_token;
-      };
-    } else { // so, this token is wrong, because it don't match special and
-             // simple values
-      std::invalid_argument{"invalid path token: " + path_token};
+  virtual bool match(const url::path &     path,
+                     path_signature::args &path_args) const noexcept {
+    if (path.size() != matchers_.size()) {
+      return false;
     }
 
-    matchers_.emplace_back(matcher);
+
+    path_signature::args retval;
+    auto                 match_iter = matchers_.begin();
+    auto                 path_iter  = path.begin();
+    for (; path_iter != path.end() && match_iter != matchers_.end();
+         ++match_iter, ++path_iter) {
+      std::string_view token = *path_iter;
+
+      std::optional<str_pair>   spair;
+      const path_token_matcher &matcher = *match_iter;
+      if (matcher(token, spair) == false) {
+        return false;
+      }
+
+      if (spair.has_value()) {
+        retval.emplace(std::move(spair.value()));
+      }
+    }
+
+    path_args.merge(retval);
+
+    return true;
   }
+
+private:
+  matcher_list matchers_;
+};
+
+class any_matcher : public url::path::signature::path_signature_impl {
+public:
+  any_matcher()
+      : url::path::signature::path_signature_impl{""} {
+  }
+
+  bool match([[maybe_unused]] const url::path &           path,
+             [[maybe_unused]] url::path::signature::args &path_args) const
+      noexcept override {
+    return true;
+  }
+};
+
+
+url::path_signature::path_signature(std::string_view signature)
+    : impl_{new path_signature_impl{signature}} {
 }
 
+url::path_signature::~path_signature() {
+  delete impl_;
+  DEAD_BEAF(impl_);
+}
+
+url::path_signature::path_signature(const path_signature &rhs)
+    : impl_{new path_signature_impl{""}} {
+  *impl_ = *rhs.impl_;
+}
+
+url::path_signature::path_signature(path_signature &&rhs)
+    : impl_{rhs.impl_} {
+  rhs.impl_ = nullptr;
+}
+
+url::path_signature &url::path_signature::operator=(const path_signature &rhs) {
+  *impl_ = *rhs.impl_;
+  return *this;
+}
+
+url::path_signature &url::path_signature::operator=(path_signature &&rhs) {
+  delete impl_;
+  impl_     = rhs.impl_;
+  rhs.impl_ = nullptr;
+  return *this;
+}
+
+url::path_signature url::path_signature::any() {
+  path_signature retval{"/"};
+  delete retval.impl_;
+  retval.impl_ = new any_matcher{};
+  return retval;
+}
 
 bool url::path_signature::match(const url::path &     path,
                                 path_signature::args &path_args) const
     noexcept {
-  if (path.size() != matchers_.size()) {
-    return false;
-  }
-
-
-  path_signature::args retval;
-  auto                 match_iter = matchers_.begin();
-  auto                 path_iter  = path.begin();
-  for (; path_iter != path.end() && match_iter != matchers_.end();
-       ++match_iter, ++path_iter) {
-    std::string_view token = *path_iter;
-
-    std::optional<str_pair>   spair;
-    const path_token_matcher &matcher = *match_iter;
-    if (matcher(token, spair) == false) {
-      return false;
-    }
-
-    if (spair.has_value()) {
-      retval.emplace(std::move(spair.value()));
-    }
-  }
-
-  path_args.merge(retval);
-
-  return true;
+  return impl_->match(path, path_args);
 }
 
 bool url::path_signature::operator==(const url::path &path) const noexcept {
   path_signature::args path_args;
-  return match(path, path_args);
+  return impl_->match(path, path_args);
 }
 
 bool operator==(const url::path &path, const url::path::signature &signature) {

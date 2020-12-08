@@ -113,10 +113,12 @@ TEST_CASE("path signature", "path_signature") {
     CHECK("/"_path == "/"_psign);
     CHECK("/path"_path == "/path"_psign);
     CHECK_FALSE("/path"_path == "/other"_psign);
+    CHECK_FALSE("/path"_path == "/"_psign);
 
     CHECK("/root"_path == "/<val>"_psign);
     CHECK("/path"_path == "/<val>"_psign);
     CHECK_FALSE("/path/more"_path == "/<val>"_psign);
+    CHECK_FALSE("/"_path == "/<val>"_psign);
   }
 
   SECTION("gettig path args") {
@@ -144,5 +146,15 @@ TEST_CASE("path signature", "path_signature") {
     CHECK(args.size() == 2);
     CHECK(args["arg"] == "val");
     CHECK(args["arg2"] == "val2");
+  }
+
+  SECTION("check any path") {
+    http::url::path::signature any = http::url::path::signature::any();
+
+    CHECK("/"_path == any);
+    CHECK("/val"_path == any);
+    CHECK("/alpha/bravo"_path == any);
+    CHECK("/very/long/path"_path == any);
+    CHECK("/path/with/<val>"_path == any);
   }
 }
