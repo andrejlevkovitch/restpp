@@ -37,80 +37,112 @@ void sigsegv_handler([[maybe_unused]] int signal) {
 namespace http = restpp::http;
 namespace asio = boost::asio;
 
+class request_t : public http::request {
+public:
+  request_t(http::request req, http::url::args path_args)
+      : http::request{std::move(req)}
+      , path_args_{std::move(path_args)} {
+  }
+
+  http::url::args path_args() const {
+    return path_args_;
+  }
+
+private:
+  http::url::args path_args_;
+};
+
 class echo_service final : public restpp::service {
 public:
+  using req_hanlder   = std::function<void(request_t, OUTPUT http::response &)>;
+  using path_handler  = std::tuple<http::url::path::signature, req_hanlder>;
+  using path_handlers = std::list<path_handler>;
+  using handlers      = std::unordered_map<http::verb, path_handlers>;
+
+  template <typename Method>
+  req_hanlder bind_handler(Method method) {
+    return std::bind(
+        [method, this](request_t req, http::response &res) {
+          try {
+            (this->*method)(std::move(req), res);
+          } catch (std::exception &e) {
+            LOG_ERROR(e.what());
+
+            // set error to response
+            res = http::response{};
+            res.result(http::status::internal_server_error);
+          }
+        },
+        std::placeholders::_1,
+        std::placeholders::_2);
+  }
+
+  echo_service() {
+    using namespace http::literals;
+
+
+    handlers_[http::verb::get].emplace_back("/",
+                                            bind_handler(&echo_service::root));
+    handlers_[http::verb::get].emplace_back("/hello/<who>",
+                                            bind_handler(&echo_service::hello));
+    handlers_[http::verb::get].emplace_back(http::url::path::signature::any(),
+                                            bind_handler(&echo_service::echo));
+
+    handlers_[http::verb::post].emplace_back(
+        "/data",
+        bind_handler(&echo_service::echo_body));
+  }
+
   void handle(http::request req, OUTPUT http::response &res) override {
-    switch (req.method()) {
-    case http::verb::get:
-      this->handleGET(std::move(req), res);
-      return;
-    case http::verb::post:
-      this->handlePOST(std::move(req), res);
-      return;
-    default:
-      break;
+    using namespace http::literals;
+
+    http::url::path path{req.relative()};
+
+    http::url::path::signature::args path_args;
+    for (const auto &[signature, handler] : handlers_[req.method()]) {
+      if (signature.match(path, path_args)) {
+        handler(request_t{std::move(req), std::move(path_args)}, res);
+        return;
+      }
     }
 
     res.result(http::status::not_found);
     return;
   }
 
-  void handleGET(http::request req, OUTPUT http::response &res) {
-    using namespace http::literals;
+  void root(request_t, OUTPUT http::response &res) {
+    res.set(http::header::content_type, "text/plain");
+    res.body() = "print something to url path";
+  }
 
-    LOG_INFO("request to: %1%", req.relative());
-
-
-    http::url::path rel_path{http::url::get_path(req.relative())};
-
-    if (rel_path == "/"_path) {
-      res.set(http::header::content_type, "text/plain");
-      res.body() = "print something to url path";
-      return;
-    } else if (http::url::path::signature::args path_args;
-               "/hello/<who>"_psign.match(
-                   rel_path,
-                   path_args)) { // sample of usage path arguments
-      res.set(http::header::content_type, "text/plain");
-      res.body() = "who is " + path_args["who"] + "?";
-      return;
-    }
-
-
-    // default
+  void echo(request_t req, OUTPUT http::response &res) {
     res.set(http::header::content_type, "application/x-www-form-urlencoded");
     res.body() = req.relative();
   }
 
-  void handlePOST(http::request req, OUTPUT http::response &res) {
-    using namespace http::literals;
+  void hello(request_t req, OUTPUT http::response &res) {
+    res.set(http::header::content_type, "text/plain");
+    res.body() = "who is " + req.path_args()["who"] + "?";
+  }
 
-    LOG_INFO("request to: %1%", req.relative());
+  void echo_body(request_t req, OUTPUT http::response &res) {
+    // at first we need read body
+    req.read_body();
+    std::string body = std::move(req.body());
 
-
-    http::url::path rel_path{http::url::get_path(req.relative())};
-
-    if (rel_path == "/data"_path) {
-      // at first we need read body
-      req.read_body();
-      std::string body = std::move(req.body());
-
-      if (body.empty()) {
-        body = "print something to request body";
-      }
-
-
-      res.set(http::header::content_type, req[http::header::content_type]);
-      res.set(http::header::content_length, body.size());
-
-      res.body() = std::move(body);
-      return;
+    if (body.empty()) {
+      body = "print something to request body";
     }
 
 
-    // default
-    res.result(http::status::not_found);
+    res.set(http::header::content_type, req[http::header::content_type]);
+    res.set(http::header::content_length, body.size());
+
+    res.body() = std::move(body);
   }
+
+private:
+  handlers handlers_;
 };
 
 class echo_serviceFactory final : public restpp::service_factory {
