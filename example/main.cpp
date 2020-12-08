@@ -39,12 +39,23 @@ namespace asio = boost::asio;
 
 class echo_service final : public restpp::service {
 public:
-  void handle(http::request, OUTPUT http::response &res) override {
+  void handle(http::request req, OUTPUT http::response &res) override {
+    switch (req.method()) {
+    case http::verb::get:
+      this->handleGET(std::move(req), res);
+      return;
+    case http::verb::post:
+      this->handlePOST(std::move(req), res);
+      return;
+    default:
+      break;
+    }
+
     res.result(http::status::not_found);
     return;
   }
 
-  void handleGET(http::request req, OUTPUT http::response &res) override {
+  void handleGET(http::request req, OUTPUT http::response &res) {
     using namespace http::literals;
 
     LOG_INFO("request to: %1%", req.relative());
@@ -71,7 +82,7 @@ public:
     res.body() = req.relative();
   }
 
-  void handlePOST(http::request req, OUTPUT http::response &res) override {
+  void handlePOST(http::request req, OUTPUT http::response &res) {
     using namespace http::literals;
 
     LOG_INFO("request to: %1%", req.relative());

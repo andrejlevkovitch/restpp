@@ -15,9 +15,6 @@ namespace restpp {
  */
 class service {
 public:
-#define RESTPP_SERVICE_DEFAULT_HANDLER                                         \
-  { return this->handle(std::move(req), res); }
-
   virtual ~service() = default;
 
   /**\brief calls before sesstion start
@@ -32,18 +29,6 @@ public:
 
 
   virtual void handle(http::request req, OUTPUT http::response &res) = 0;
-  virtual void handleGET(http::request req, OUTPUT http::response &res)
-      RESTPP_SERVICE_DEFAULT_HANDLER;
-  virtual void handleHEAD(http::request req, OUTPUT http::response &res)
-      RESTPP_SERVICE_DEFAULT_HANDLER;
-  virtual void handlePUT(http::request req, OUTPUT http::response &res)
-      RESTPP_SERVICE_DEFAULT_HANDLER;
-  virtual void handlePOST(http::request req, OUTPUT http::response &res)
-      RESTPP_SERVICE_DEFAULT_HANDLER;
-  virtual void handlePATCH(http::request req, OUTPUT http::response &res)
-      RESTPP_SERVICE_DEFAULT_HANDLER;
-  virtual void handleDELETE(http::request req, OUTPUT http::response &res)
-      RESTPP_SERVICE_DEFAULT_HANDLER;
 };
 
 using service_ptr = std::shared_ptr<service>;

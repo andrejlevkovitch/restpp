@@ -137,7 +137,7 @@ private:
     reenter(this) {
       for (;;) {
         // XXX every request must be handled by new parser instance
-        reqParser_ = std::make_shared<request_parser>();
+        reqParser_ = std::make_unique<request_parser>();
 
 
         yield beast::http::async_read_header(
@@ -156,8 +156,8 @@ private:
 
         // request handling
         // new response
-        res_           = std::make_shared<http::response>();
-        resSerializer_ = std::make_shared<response_serializer>(*res_);
+        res_           = std::make_unique<http::response>();
+        resSerializer_ = std::make_unique<response_serializer>(*res_);
         {
           // read body callback
           auto read_body_callback = [this]() {
@@ -232,34 +232,13 @@ private:
 
           // handle request
           try {
-            switch (req.method()) {
-            case http::verb::get:
-              service->handleGET(std::move(req), *res_);
-              break;
-            case http::verb::head:
-              service->handleHEAD(std::move(req), *res_);
-              break;
-            case http::verb::put:
-              service->handlePUT(std::move(req), *res_);
-              break;
-            case http::verb::post:
-              service->handlePOST(std::move(req), *res_);
-              break;
-            case http::verb::patch:
-              service->handlePATCH(std::move(req), *res_);
-              break;
-            case http::verb::delete_:
-              service->handleDELETE(std::move(req), *res_);
-              break;
-            default:
-              service->handle(std::move(req), *res_);
-            }
+            service->handle(std::move(req), *res_);
           } catch (std::exception &e) {
             LOG_ERROR("catch exception from service: %1%", e.what());
 
             // reinitialize the response, because there can be invalid values
             // after exception
-            res_ = std::make_shared<http::response>();
+            res_ = std::make_unique<http::response>();
             res_->version(version);
             res_->keep_alive(keep_alive);
             res_->result(http::status::internal_server_error);
@@ -283,10 +262,10 @@ private:
                                     asio::bind_executor(strand_, skip));
           }
 
-          if (resSerializer_->is_done()) { // in this case body already writed
-            goto PostWriting;
-          } else if (resSerializer_->split() == false) {
+          if (resSerializer_->split() == false) {
             res_->prepare_payload();
+          } else if (resSerializer_->is_done()) { // response alredy writed
+            goto PostWriting;
           }
         }
 
@@ -322,9 +301,9 @@ private:
   std::atomic_bool is_open_;
 
   request_buffer                       reqBuffer_;
-  std::shared_ptr<request_parser>      reqParser_;
-  std::shared_ptr<response_serializer> resSerializer_;
-  std::shared_ptr<http::response>      res_;
+  std::unique_ptr<request_parser>      reqParser_;
+  std::unique_ptr<http::response>      res_;
+  std::unique_ptr<response_serializer> resSerializer_;
 
   service_list services_;
 };
@@ -357,7 +336,7 @@ public:
     acceptor_.bind(ep);
     acceptor_.listen(socket::max_listen_connections);
 
-    strandPtr_ = std::make_shared<strand>(acceptor_.get_executor());
+    strandPtr_ = std::make_unique<strand>(acceptor_.get_executor());
   }
 
   void startAccepting() noexcept {
@@ -450,7 +429,7 @@ private:
 
 private:
   asio::io_context &      ioContext_;
-  std::shared_ptr<strand> strandPtr_;
+  std::unique_ptr<strand> strandPtr_;
   acceptor                acceptor_;
   std::string             root_path_;
   service_factory_list    service_factories_;
