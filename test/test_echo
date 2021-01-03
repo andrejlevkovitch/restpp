@@ -12,7 +12,7 @@ SERVER_PID=$!
 sleep 2
 
 
-WRK_EXE="wrk"
+WRK_EXE="${CMAKE_SOURCE_DIR}/third-party/wrk/wrk"
 WRK_SCRIPT="${ECHO_STRESS_WRK_SCRIPT}"
 
 
