@@ -49,11 +49,11 @@ target_link_libraries(${PROJECT_NAME} PUBLIC
 
 
 add_executable(echo_service example/main.cpp)
-target_link_options(echo_service PRIVATE -ldl)
 target_link_libraries(echo_service PRIVATE
   ${PROJECT_NAME}
   ${Boost_LIBRARIES}
   Threads::Threads
+  dl # NOTE: this library must links after all other libraries!
   )
 
 
