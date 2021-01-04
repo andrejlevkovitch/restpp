@@ -1,7 +1,7 @@
 # fast async rest http micro service
 
 
-## Bugs
+## Notes
 
-Usage of `http::response::write_headers` hit performance. I don't know why, so you should use
-it only if you need some special processing of response.
+Usage of `http::response::write_headers` hit performance, so its not recomended
+to use it (except case, when you completely understand that you do).

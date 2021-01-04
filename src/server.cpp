@@ -60,6 +60,10 @@ public:
   void start() {
     LOG_TRACE("start new session");
 
+    // @see https://github.com/boostorg/beast/issues/2141
+    socket_.set_option(tcp::no_delay(true));
+
+
     std::stringstream remoteEndpoint;
     remoteEndpoint << socket_.remote_endpoint();
 
