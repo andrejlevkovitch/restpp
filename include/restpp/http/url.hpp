@@ -17,13 +17,29 @@ public:
 
   class args : public std::multimap<std::string, std::string> {
   public:
-    const args::mapped_type &operator[](const args::key_type &key) {
+    args::mapped_type &operator[](const args::key_type &key) {
       if (auto found = this->lower_bound(key); found != this->end()) {
         return found->second;
       }
 
       const auto &out = this->emplace(key, args::mapped_type{});
       return out->second;
+    }
+
+    const args::mapped_type &at(const args::key_type &key) const {
+      if (auto found = this->lower_bound(key); found != this->end()) {
+        return found->second;
+      }
+
+      throw std::out_of_range{"args::at"};
+    }
+
+    args::mapped_type &at(const args::key_type &key) {
+      if (auto found = this->lower_bound(key); found != this->end()) {
+        return found->second;
+      }
+
+      throw std::out_of_range{"args::at"};
     }
   };
 

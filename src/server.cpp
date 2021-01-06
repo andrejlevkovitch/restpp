@@ -236,16 +236,11 @@ private:
 
           // handle request
           try {
-            service->handle(std::move(req), *res_);
+            service->handle(req, *res_);
           } catch (std::exception &e) {
             LOG_ERROR("catch exception from service: %1%", e.what());
 
-            // reinitialize the response, because there can be invalid values
-            // after exception
-            res_ = std::make_unique<http::response>();
-            res_->version(version);
-            res_->keep_alive(keep_alive);
-            res_->result(http::status::internal_server_error);
+            service->exception(req, *res_, e);
           }
 
 

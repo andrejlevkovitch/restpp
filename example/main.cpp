@@ -39,17 +39,25 @@ namespace asio = boost::asio;
 
 class request_t : public http::request {
 public:
-  request_t(http::request req, http::url::args path_args)
+  request_t(http::request   req,
+            http::url::args path_args,
+            http::url::args query_args)
       : http::request{std::move(req)}
-      , path_args_{std::move(path_args)} {
+      , path_args_{std::move(path_args)}
+      , query_args_{std::move(query_args)} {
   }
 
-  http::url::args path_args() const {
+  const http::url::args &path_args() const noexcept {
     return path_args_;
+  }
+
+  const http::url::args &query_args() const noexcept {
+    return query_args_;
   }
 
 private:
   http::url::args path_args_;
+  http::url::args query_args_;
 };
 
 class echo_service final : public restpp::service {
@@ -61,20 +69,10 @@ public:
 
   template <typename Method>
   req_hanlder bind_handler(Method method) {
-    return std::bind(
-        [method, this](request_t req, http::response &res) {
-          try {
-            (this->*method)(std::move(req), res);
-          } catch (std::exception &e) {
-            LOG_ERROR(e.what());
-
-            // set error to response
-            res = http::response{};
-            res.result(http::status::internal_server_error);
-          }
-        },
-        std::placeholders::_1,
-        std::placeholders::_2);
+    return std::bind(method,
+                     this,
+                     std::placeholders::_1,
+                     std::placeholders::_2);
   }
 
   echo_service() {
@@ -93,21 +91,39 @@ public:
         bind_handler(&echo_service::echo_body));
   }
 
-  void handle(http::request req, OUTPUT http::response &res) override {
+  void handle(const http::request &req, OUTPUT http::response &res) override {
     using namespace http::literals;
 
-    http::url::path path{req.relative()};
+    // parse path and query
+    auto [path_str, query_str] = http::url::split(req.relative());
 
-    http::url::path::signature::args path_args;
+    http::url::path path{path_str};
+
+    // try find needed endpoint
+    http::url::args path_args;
     for (const auto &[signature, handler] : handlers_[req.method()]) {
       if (signature.match(path, path_args)) {
-        handler(request_t{std::move(req), std::move(path_args)}, res);
+        http::url::args query_args = http::url::query::split(query_str);
+
+        handler(request_t{req, std::move(path_args), std::move(query_args)},
+                res);
         return;
       }
     }
 
     res.result(http::status::not_found);
     return;
+  }
+
+  void exception(const http::request &req,
+                 OUTPUT http::response &res,
+                 std::exception &       e) noexcept override {
+    LOG_ERROR("service %1% at %2% get exception: %3%",
+              "echo",
+              req.target(),
+              e.what());
+
+    service::exception(req, res, e);
   }
 
   void root(request_t, OUTPUT http::response &res) {
@@ -122,7 +138,7 @@ public:
 
   void hello(request_t req, OUTPUT http::response &res) {
     res.set(http::header::content_type, "text/plain");
-    res.body() = "who is " + req.path_args()["who"] + "?";
+    res.body() = "who is " + req.path_args().at("who") + "?";
   }
 
   void echo_body(request_t req, OUTPUT http::response &res) {

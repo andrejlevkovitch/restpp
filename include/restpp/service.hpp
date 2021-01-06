@@ -28,7 +28,22 @@ public:
   virtual void at_session_close() noexcept {};
 
 
-  virtual void handle(http::request req, OUTPUT http::response &res) = 0;
+  virtual void handle(const http::request &req, OUTPUT http::response &res) = 0;
+
+
+  /**\brief call if server catch exception from service::handle. By default just
+   * send internal_server_error code to client
+   */
+  virtual void exception(const http::request &req,
+                         OUTPUT http::response &          res,
+                         [[maybe_unused]] std::exception &e) noexcept {
+    // reinitialize the response, because there can be invalid values
+    // after exception
+    res = http::response{};
+    res.version(req.version());
+    res.keep_alive(req.keep_alive());
+    res.result(boost::beast::http::status::internal_server_error);
+  }
 };
 
 using service_ptr = std::shared_ptr<service>;
