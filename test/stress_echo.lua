@@ -18,7 +18,7 @@ function _G.setup(thread)
     thread:set("res_body", endpoint)
   elseif C_TEST_VERB == "POST" then
     thread:set("verb", "POST");
-    thread:set("endpoint", wrk.path .. "/data")
+    thread:set("endpoint", wrk.path)
     thread:set("req_body", endpoint)
     thread:set("res_body", endpoint)
   else

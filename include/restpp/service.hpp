@@ -28,7 +28,7 @@ public:
   virtual void at_session_close() noexcept {};
 
 
-  virtual void handle(const http::request &req, OUTPUT http::response &res) = 0;
+  virtual void handle(http::request &req, OUTPUT http::response &res) = 0;
 
 
   /**\brief call if server catch exception from service::handle. By default just

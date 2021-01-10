@@ -37,32 +37,61 @@ void sigsegv_handler([[maybe_unused]] int signal) {
 namespace http = restpp::http;
 namespace asio = boost::asio;
 
-class request_t : public http::request {
+
+class stats_service final : public restpp::service {
 public:
-  request_t(http::request   req,
-            http::url::args path_args,
-            http::url::args query_args)
-      : http::request{std::move(req)}
-      , path_args_{std::move(path_args)}
-      , query_args_{std::move(query_args)} {
+  void handle(http::request &req, http::response &res) override {
+    if (req.method() != http::verb::get && req.relative() != "/") {
+      res.result(http::status::not_found);
+    }
+
+    auto [lock, stats] = get_stats();
+
+    std::stringstream ss;
+    size_t            total = 0;
+    for (const auto &[target, count] : stats) {
+      ss << target << '\t' << count << std::endl;
+      total += count;
+    }
+    ss << "  total:\t" << total << std::endl;
+
+    res.body() = ss.str();
   }
 
-  const http::url::args &path_args() const noexcept {
-    return path_args_;
+  static void increment(std::string_view target) {
+    auto [lock, stats] = get_stats();
+    stats[std::string(target)]++;
   }
 
-  const http::url::args &query_args() const noexcept {
-    return query_args_;
+  static void increment(const http::request &req) {
+    http::url::path absolute_path{http::url::get_path(req.target())};
+    stats_service::increment(std::string{absolute_path});
   }
 
 private:
-  http::url::args path_args_;
-  http::url::args query_args_;
+  static std::pair<std::unique_lock<std::mutex>,
+                   std::unordered_map<std::string, int> &>
+  get_stats() {
+    static std::mutex                           mutex_;
+    static std::unordered_map<std::string, int> calls_;
+
+    return std::make_pair(std::unique_lock<std::mutex>{mutex_},
+                          std::ref(calls_));
+  }
 };
+
+class stats_service_factory : public restpp::service_factory {
+public:
+  restpp::service_ptr make_service() override {
+    return std::make_shared<stats_service>();
+  }
+};
+
 
 class echo_service final : public restpp::service {
 public:
-  using req_hanlder   = std::function<void(request_t, OUTPUT http::response &)>;
+  using req_hanlder =
+      std::function<void(http::request &req, OUTPUT http::response &)>;
   using path_handler  = std::tuple<http::url::path::signature, req_hanlder>;
   using path_handlers = std::list<path_handler>;
   using handlers      = std::unordered_map<http::verb, path_handlers>;
@@ -81,32 +110,32 @@ public:
 
     handlers_[http::verb::get].emplace_back("/",
                                             bind_handler(&echo_service::root));
-    handlers_[http::verb::get].emplace_back("/hello/<who>",
-                                            bind_handler(&echo_service::hello));
     handlers_[http::verb::get].emplace_back(http::url::path::signature::any(),
                                             bind_handler(&echo_service::echo));
 
     handlers_[http::verb::post].emplace_back(
-        "/data",
+        "/",
         bind_handler(&echo_service::echo_body));
   }
 
-  void handle(const http::request &req, OUTPUT http::response &res) override {
+  void handle(http::request &req, OUTPUT http::response &res) override {
     using namespace http::literals;
+
+    // at first add path to stats
+    stats_service::increment(req);
 
     // parse path and query
     auto [path_str, query_str] = http::url::split(req.relative());
 
-    http::url::path path{path_str};
 
     // try find needed endpoint
+    http::url::path path{path_str};
     http::url::args path_args;
     for (const auto &[signature, handler] : handlers_[req.method()]) {
       if (signature.match(path, path_args)) {
         http::url::args query_args = http::url::query::split(query_str);
 
-        handler(request_t{req, std::move(path_args), std::move(query_args)},
-                res);
+        handler(req, res);
         return;
       }
     }
@@ -126,22 +155,18 @@ public:
     service::exception(req, res, e);
   }
 
-  void root(request_t, OUTPUT http::response &res) {
+  void root([[maybe_unused]] const http::request &req,
+            OUTPUT http::response &res) {
     res.set(http::header::content_type, "text/plain");
     res.body() = "print something to url path";
   }
 
-  void echo(request_t req, OUTPUT http::response &res) {
+  void echo(http::request &req, OUTPUT http::response &res) {
     res.set(http::header::content_type, "application/x-www-form-urlencoded");
     res.body() = req.relative();
   }
 
-  void hello(request_t req, OUTPUT http::response &res) {
-    res.set(http::header::content_type, "text/plain");
-    res.body() = "who is " + req.path_args().at("who") + "?";
-  }
-
-  void echo_body(request_t req, OUTPUT http::response &res) {
+  void echo_body(http::request &req, OUTPUT http::response &res) {
     // at first we need read body
     req.read_body();
     std::string body = std::move(req.body());
@@ -152,7 +177,6 @@ public:
 
 
     res.set(http::header::content_type, req[http::header::content_type]);
-    res.set(http::header::content_length, body.size());
 
     res.body() = std::move(body);
   }
@@ -161,10 +185,39 @@ private:
   handlers handlers_;
 };
 
-class echo_serviceFactory final : public restpp::service_factory {
+class echo_service_factory final : public restpp::service_factory {
 public:
   restpp::service_ptr make_service() {
     return std::make_shared<echo_service>();
+  }
+};
+
+
+class say_service final : public restpp::service {
+public:
+  void handle(restpp::http::request & req,
+              restpp::http::response &res) override {
+    // at first add path to stats
+    stats_service::increment(req);
+
+
+    std::string_view path_str = http::url::get_path(req.relative());
+
+
+    http::url::path         path{path_str};
+    restpp::http::url::args path_args;
+    if (http::url::path::signature{"/<what>"}.match(path, path_args)) {
+      res.body() = path_args.at("what") + "\n";
+    }
+
+    res.result(http::status::not_found);
+  }
+};
+
+class say_service_factory final : public restpp::service_factory {
+public:
+  restpp::service_ptr make_service() {
+    return std::make_shared<say_service>();
   }
 };
 
@@ -233,8 +286,10 @@ int main(int argc, char *argv[]) {
 
   restpp::server_builder server_builder{io_context};
   server_builder.set_uri(server_uri);
-  server_builder.add_service(std::make_shared<echo_serviceFactory>(), "/");
-
+  server_builder.add_service(std::make_shared<echo_service_factory>(), "/echo");
+  server_builder.add_service(std::make_shared<say_service_factory>(), "/say");
+  server_builder.add_service(std::make_shared<stats_service_factory>(),
+                             "/stats");
 
   // start the server
   LOG_INFO("start server");

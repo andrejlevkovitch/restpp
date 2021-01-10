@@ -1,7 +1,7 @@
 #!/bin/bash
 
 SERVER="${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/echo_service"
-URL="http://localhost:8011/echo"
+URL="http://localhost:8011"
 LOG_FILE="echo.log"
 THREAD_COUNT=4
 
@@ -9,14 +9,17 @@ $SERVER --url $URL --threads $THREAD_COUNT &>$LOG_FILE &
 SERVER_PID=$!
 
 # wait for server start
-sleep 2
+sleep 1
 
 
 WRK_EXE="${CMAKE_SOURCE_DIR}/third-party/wrk/wrk"
 WRK_SCRIPT="${ECHO_STRESS_WRK_SCRIPT}"
 
 
-$WRK_EXE -t8 -c16 -d1m -s $WRK_SCRIPT --timeout 10s $URL
+$WRK_EXE -t8 -c16 -d1m -s $WRK_SCRIPT --timeout 10s "$URL/echo"
+
+echo ""
+curl "$URL/stats"
 
 
 # and stop the server
