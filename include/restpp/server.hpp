@@ -38,6 +38,13 @@ public:
   server_builder &add_service(service_factory_ptr factory,
                               std::string_view    path = "");
 
+  /**\brief set maximum number of sessions, that server can keep per one time.
+   * By default is not limited
+   * \param count 0 is special value - means that server count of sessions not
+   * limited
+   */
+  server_builder &set_max_session_count(size_t count);
+
   server build() const;
 
 private:
@@ -45,5 +52,7 @@ private:
 
   std::string          root_;
   service_factory_list service_factories_;
+
+  size_t max_session_count_;
 };
 } // namespace restpp

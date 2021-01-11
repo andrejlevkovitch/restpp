@@ -320,13 +320,16 @@ public:
   using strand      = asio::strand<asio::io_context::executor_type>;
   using service_factory_list =
       std::list<std::pair<std::string, service_factory_ptr>>;
+  using session_pool = std::list<session_ptr>;
 
   server_impl(asio::io_context &   ioContext,
               endpoint             ep,
-              service_factory_list factories)
+              service_factory_list factories,
+              size_t               max_session_count)
       : ioContext_{ioContext}
       , acceptor_{ioContext}
-      , service_factories_{factories} {
+      , service_factories_{factories}
+      , max_session_count_{max_session_count} {
     LOG_TRACE("construct sever");
 
     tcp protocol = ep.protocol();
@@ -401,6 +404,23 @@ private:
           });
 
 
+          if (max_session_count_ && sessions_.size() >= max_session_count_) {
+            LOG_WARNING("maximum session count exceeded: %1%",
+                        max_session_count_);
+            sock.shutdown(socket::shutdown_both, err);
+            if (err.failed()) {
+              LOG_ERROR(err.message());
+            }
+
+            sock.close(err);
+            if (err.failed()) {
+              LOG_ERROR(err.message());
+            }
+
+            continue;
+          }
+
+
           session::service_list services;
           for (const auto &[path, service_factory] : service_factories_) {
             services.emplace_back(http::url::path{path},
@@ -433,7 +453,8 @@ private:
   std::string             root_path_;
   service_factory_list    service_factories_;
 
-  std::list<session_ptr> sessions_;
+  session_pool sessions_;
+  size_t       max_session_count_;
 };
 
 
@@ -450,7 +471,8 @@ server &server::stop() {
 
 
 server_builder::server_builder(asio::io_context &io_context)
-    : io_context_{io_context} {
+    : io_context_{io_context}
+    , max_session_count_{0} {
 }
 
 server_builder &server_builder::set_uri(std::string_view root) {
@@ -461,6 +483,11 @@ server_builder &server_builder::set_uri(std::string_view root) {
 server_builder &server_builder::add_service(service_factory_ptr factory,
                                             std::string_view    path) {
   service_factories_.emplace_back(path, std::move(factory));
+  return *this;
+}
+
+server_builder &server_builder::set_max_session_count(size_t count) {
+  max_session_count_ = count;
   return *this;
 }
 
@@ -500,7 +527,10 @@ server server_builder::build() const {
   }
 
   std::shared_ptr<server_impl> impl =
-      std::make_shared<server_impl>(io_context_, endpoint, service_factories);
+      std::make_shared<server_impl>(io_context_,
+                                    endpoint,
+                                    service_factories,
+                                    max_session_count_);
 
 
   server retval{};

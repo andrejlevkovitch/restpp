@@ -19,12 +19,14 @@
 #define HELP_FLAG         "help"
 #define URL_FLAG          "url"
 #define THREAD_COUNT_FLAG "threads"
+#define MAX_SESSION_COUNT "max_session_count"
 #define VERBOSE_FLAG      "verbose"
 #define VERBOSE_SHORT     "v"
 
-#define DEFAULT_HOST         "localhost"
-#define DEFAULT_PORT         8000
-#define DEFAULT_THREAD_COUNT 1
+#define DEFAULT_HOST              "localhost"
+#define DEFAULT_PORT              8000
+#define DEFAULT_THREAD_COUNT      1
+#define DEFAULT_MAX_SESSION_COUNT 0 // not limited
 
 
 void sigsegv_handler([[maybe_unused]] int signal) {
@@ -234,6 +236,7 @@ int main(int argc, char *argv[]) {
     (HELP_FLAG, "print description")
     (URL_FLAG, po::value<std::string>()->default_value("http://" DEFAULT_HOST ":" + std::to_string(DEFAULT_PORT)), "url for the service")
     (THREAD_COUNT_FLAG, po::value<ushort>()->default_value(DEFAULT_THREAD_COUNT), "count of started threads")
+    (MAX_SESSION_COUNT, po::value<size_t>()->default_value(DEFAULT_MAX_SESSION_COUNT), "maximum count of listened connections by the server")
     (VERBOSE_FLAG "," VERBOSE_SHORT, "show more logs");
   // clang-format on
 
@@ -275,16 +278,19 @@ int main(int argc, char *argv[]) {
   }
 
 
-  std::string server_uri   = args[URL_FLAG].as<std::string>();
-  ushort      thread_count = args[THREAD_COUNT_FLAG].as<ushort>();
+  std::string server_uri        = args[URL_FLAG].as<std::string>();
+  ushort      thread_count      = args[THREAD_COUNT_FLAG].as<ushort>();
+  size_t      max_session_count = args[MAX_SESSION_COUNT].as<size_t>();
 
-  LOG_INFO("server uri:       %1%", server_uri);
-  LOG_INFO("count of threads: %1%", thread_count);
+  LOG_INFO("server uri:             %1%", server_uri);
+  LOG_INFO("count of threads:       %1%", thread_count);
+  LOG_INFO("maximum session count:  %1%", max_session_count);
 
 
   asio::io_context io_context;
 
   restpp::server_builder server_builder{io_context};
+  server_builder.set_max_session_count(max_session_count);
   server_builder.set_uri(server_uri);
   server_builder.add_service(std::make_shared<echo_service_factory>(), "/echo");
   server_builder.add_service(std::make_shared<say_service_factory>(), "/say");
