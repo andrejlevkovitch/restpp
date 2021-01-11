@@ -246,22 +246,6 @@ private:
 
 
         PreWriting:
-          // skip request body if it was set and didn't read
-          if (req_parser_->is_done() == false) {
-            // TODO we can just skeep the body?
-            auto skip = [](error_code e, size_t trans) {
-              if (e.failed()) {
-                LOG_ERROR("error while skipping body: %1%", e.message());
-                return;
-              }
-              LOG_DEBUG("skipped body: %1.3fKb", trans / 1024.);
-            };
-            beast::http::async_read(socket_,
-                                    req_buffer_,
-                                    *req_parser_,
-                                    asio::bind_executor(strand_, skip));
-          }
-
           if (res_serializer_->split() == false) {
             res_->prepare_payload();
           } else if (res_serializer_->is_done()) { // response alredy writed
@@ -290,6 +274,22 @@ private:
                            asio::error::make_error_code(asio::error::eof),
                            0);
           return;
+        }
+
+        // skip request body if it was set and didn't read
+        if (req_parser_->is_done() == false) {
+          LOG_DEBUG("skip request body");
+
+          yield beast::http::async_read(
+              socket_,
+              req_buffer_,
+              *req_parser_,
+              asio::bind_executor(strand_,
+                                  std::bind(&session::operator(),
+                                            this,
+                                            std::move(self_),
+                                            std::placeholders::_1,
+                                            std::placeholders::_2)));
         }
       }
     }
