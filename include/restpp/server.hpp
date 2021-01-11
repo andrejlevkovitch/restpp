@@ -18,7 +18,7 @@ class server {
   friend server_builder;
 
 public:
-  server &asyncRun();
+  server &async_run();
   server &stop();
 
 private:

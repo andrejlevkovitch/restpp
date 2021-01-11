@@ -69,6 +69,10 @@ bool url::path::operator==(const path &rhs) const {
   return path_ == rhs.path_;
 }
 
+bool url::path::operator!=(const path &rhs) const {
+  return path_ != rhs.path_;
+}
+
 url::path url::path::operator/(std::string_view rhs) const {
   return this->operator/(path{rhs});
 }
@@ -326,5 +330,14 @@ bool url::path_signature::operator==(const url::path &path) const noexcept {
 
 bool operator==(const url::path &path, const url::path::signature &signature) {
   return signature == path;
+}
+
+bool url::path_signature::operator!=(const url::path &path) const noexcept {
+  path_signature::args path_args;
+  return impl_->match(path, path_args) == false;
+}
+
+bool operator!=(const url::path &path, const url::path::signature &signature) {
+  return signature != path;
 }
 } // namespace restpp::http

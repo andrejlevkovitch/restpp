@@ -62,6 +62,7 @@ private:
      */
     bool match(const url::path &path, OUTPUT args &args) const noexcept;
     bool operator==(const url::path &path) const noexcept;
+    bool operator!=(const url::path &path) const noexcept;
 
     /**\return path_signature that match any path
      */
@@ -92,6 +93,7 @@ public:
 
     bool is_base_of(const path &rhs) const;
     bool operator==(const path &rhs) const;
+    bool operator!=(const path &rhs) const;
 
     path operator/(std::string_view rhs) const;
     path operator/(const path &rhs) const noexcept;
@@ -136,6 +138,7 @@ public:
 };
 
 bool operator==(const url::path &path, const url::path::signature &signature);
+bool operator!=(const url::path &path, const url::path::signature &signature);
 
 namespace literals {
 inline url::path operator""_path(const char *str, size_t len) {

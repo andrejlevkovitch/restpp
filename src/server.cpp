@@ -141,13 +141,13 @@ private:
     reenter(this) {
       for (;;) {
         // XXX every request must be handled by new parser instance
-        reqParser_ = std::make_unique<request_parser>();
+        req_parser_ = std::make_unique<request_parser>();
 
 
         yield beast::http::async_read_header(
             socket_,
-            reqBuffer_,
-            *reqParser_,
+            req_buffer_,
+            *req_parser_,
             asio::bind_executor(strand_,
                                 std::bind(&session::operator(),
                                           this,
@@ -160,44 +160,45 @@ private:
 
         // request handling
         // new response
-        res_           = std::make_unique<http::response>();
-        resSerializer_ = std::make_unique<response_serializer>(*res_);
+        res_            = std::make_unique<http::response>();
+        res_serializer_ = std::make_unique<response_serializer>(*res_);
         {
           // read body callback
           auto read_body_callback = [this]() {
-            if (reqParser_->is_done()) {
-              return reqParser_->get(); // nothing to read
+            if (req_parser_->is_done()) {
+              return req_parser_->get(); // nothing to read
             }
 
-            size_t trans = beast::http::read(socket_, reqBuffer_, *reqParser_);
+            size_t trans =
+                beast::http::read(socket_, req_buffer_, *req_parser_);
 
             LOG_DEBUG("readed body: %1.3fKb", trans / 1024.);
 
-            return reqParser_->get();
+            return req_parser_->get();
           };
 
           // write headers callback
           auto write_headers_callback = [this]() {
-            if (resSerializer_->is_done()) {
+            if (res_serializer_->is_done()) {
               return; // nothing to write
             }
 
-            size_t trans = beast::http::write_header(socket_, *resSerializer_);
+            size_t trans = beast::http::write_header(socket_, *res_serializer_);
 
             LOG_DEBUG("writed headers: %1.3fKb", trans / 1024.);
           };
           auto write_callback = [this]() {
-            if (resSerializer_->is_done()) {
+            if (res_serializer_->is_done()) {
               return; // nothing to write
             }
 
-            size_t trans = beast::http::write(socket_, *resSerializer_);
+            size_t trans = beast::http::write(socket_, *res_serializer_);
 
             LOG_DEBUG("writed body: %1.3fKb", trans / 1024.);
           };
 
 
-          http::request req       = reqParser_->get();
+          http::request req       = req_parser_->get();
           req.read_body_callback_ = read_body_callback;
 
           res_->write_headers_callback_ = write_headers_callback;
@@ -246,7 +247,7 @@ private:
 
         PreWriting:
           // skip request body if it was set and didn't read
-          if (reqParser_->is_done() == false) {
+          if (req_parser_->is_done() == false) {
             // TODO we can just skeep the body?
             auto skip = [](error_code e, size_t trans) {
               if (e.failed()) {
@@ -256,14 +257,14 @@ private:
               LOG_DEBUG("skipped body: %1.3fKb", trans / 1024.);
             };
             beast::http::async_read(socket_,
-                                    reqBuffer_,
-                                    *reqParser_,
+                                    req_buffer_,
+                                    *req_parser_,
                                     asio::bind_executor(strand_, skip));
           }
 
-          if (resSerializer_->split() == false) {
+          if (res_serializer_->split() == false) {
             res_->prepare_payload();
-          } else if (resSerializer_->is_done()) { // response alredy writed
+          } else if (res_serializer_->is_done()) { // response alredy writed
             goto PostWriting;
           }
         }
@@ -271,7 +272,7 @@ private:
 
         yield beast::http::async_write(
             socket_,
-            *resSerializer_,
+            *res_serializer_,
             asio::bind_executor(strand_,
                                 std::bind(&session::operator(),
                                           this,
@@ -299,10 +300,10 @@ private:
   strand           strand_;
   std::atomic_bool is_open_;
 
-  request_buffer                       reqBuffer_;
-  std::unique_ptr<request_parser>      reqParser_;
+  request_buffer                       req_buffer_;
+  std::unique_ptr<request_parser>      req_parser_;
   std::unique_ptr<http::response>      res_;
-  std::unique_ptr<response_serializer> resSerializer_;
+  std::unique_ptr<response_serializer> res_serializer_;
 
   service_list services_;
 };
@@ -322,12 +323,12 @@ public:
       std::list<std::pair<std::string, service_factory_ptr>>;
   using session_pool = std::list<session_ptr>;
 
-  server_impl(asio::io_context &   ioContext,
+  server_impl(asio::io_context &   io_context,
               endpoint             ep,
               service_factory_list factories,
               size_t               max_session_count)
-      : ioContext_{ioContext}
-      , acceptor_{ioContext}
+      : io_context_{io_context}
+      , acceptor_{io_context}
       , service_factories_{factories}
       , max_session_count_{max_session_count} {
     LOG_TRACE("construct sever");
@@ -338,24 +339,24 @@ public:
     acceptor_.bind(ep);
     acceptor_.listen(socket::max_listen_connections);
 
-    strandPtr_ = std::make_unique<strand>(acceptor_.get_executor());
+    strand_ptr_ = std::make_unique<strand>(acceptor_.get_executor());
   }
 
-  void startAccepting() noexcept {
+  void start_accepting() noexcept {
     LOG_TRACE("start accepting");
 
     self self_ = this->shared_from_this();
 
-    this->operator()(std::move(self_), error_code{}, socket{this->ioContext_});
+    this->operator()(std::move(self_), error_code{}, socket{this->io_context_});
   }
 
-  void stopAccepting() noexcept(false) {
+  void stop_accepting() noexcept(false) {
     LOG_TRACE("stop accepting");
 
     acceptor_.cancel();
   }
 
-  void closeAllSessions() {
+  void close_all_sessions() {
     LOG_TRACE("close all sessions");
 
     for (session_ptr &session : sessions_) {
@@ -384,7 +385,7 @@ private:
     reenter(this) {
       for (;;) {
         yield acceptor_.async_accept(
-            asio::bind_executor(*strandPtr_,
+            asio::bind_executor(*strand_ptr_,
                                 std::bind(&server_impl::operator(),
                                           this,
                                           std::move(self_),
@@ -447,8 +448,8 @@ private:
 
 
 private:
-  asio::io_context &      ioContext_;
-  std::unique_ptr<strand> strandPtr_;
+  asio::io_context &      io_context_;
+  std::unique_ptr<strand> strand_ptr_;
   acceptor                acceptor_;
   std::string             root_path_;
   service_factory_list    service_factories_;
@@ -458,14 +459,14 @@ private:
 };
 
 
-server &server::asyncRun() {
-  impl_->startAccepting();
+server &server::async_run() {
+  impl_->start_accepting();
   return *this;
 }
 
 server &server::stop() {
-  impl_->stopAccepting();
-  impl_->closeAllSessions();
+  impl_->stop_accepting();
+  impl_->close_all_sessions();
   return *this;
 }
 

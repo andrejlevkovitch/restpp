@@ -300,7 +300,7 @@ int main(int argc, char *argv[]) {
   // start the server
   LOG_INFO("start server");
   restpp::server server = server_builder.build();
-  server.asyncRun();
+  server.async_run();
 
 
   asio::signal_set sigset{io_context, SIGINT, SIGTERM};
