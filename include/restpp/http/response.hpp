@@ -41,6 +41,7 @@ public:
    * the response
    */
   void write() {
+    this->prepare_payload();
     write_callback_();
   }
 
