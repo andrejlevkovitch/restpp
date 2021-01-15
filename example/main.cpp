@@ -67,7 +67,8 @@ public:
 
   static void increment(const http::request &req) {
     http::url::path absolute_path{http::url::get_path(req.target())};
-    stats_service::increment(std::string{absolute_path});
+    stats_service::increment(std::string{req.method_string()} + "\t" +
+                             std::string{absolute_path});
   }
 
 private:
