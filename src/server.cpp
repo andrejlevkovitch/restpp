@@ -51,7 +51,11 @@ public:
   using strand = asio::strand<socket::executor_type>;
 
 
-  session(socket sock, service_list services) noexcept
+  session(socket                sock,
+          service_list          services,
+          std::optional<size_t> req_headers_limit,
+          std::optional<size_t> req_body_limit,
+          std::optional<size_t> res_buffer_limit) noexcept
       : socket_ {
     std::move(sock)
   }
@@ -64,7 +68,8 @@ public:
     sock.get_executor()
   }
 #endif
-  , is_open_{true}, services_{services} {
+  , is_open_{true}, services_{services}, req_headers_limit_{req_headers_limit},
+      req_body_limit_{req_body_limit}, res_buffer_limit_{res_buffer_limit} {
     LOG_TRACE("construct session");
   }
 
@@ -154,6 +159,13 @@ private:
         // XXX every request must be handled by new parser instance
         req_parser_ = std::make_unique<request_parser>();
 
+        if (req_headers_limit_.has_value()) {
+          req_parser_->header_limit(req_headers_limit_.value());
+        }
+        if (req_body_limit_.has_value()) {
+          req_parser_->body_limit(req_body_limit_.value());
+        }
+
 
         LOG_TRACE("try read request headers");
 
@@ -175,6 +187,12 @@ private:
         // new response
         res_            = std::make_unique<http::response>();
         res_serializer_ = std::make_unique<response_serializer>(*res_);
+
+        if (res_buffer_limit_.has_value()) {
+          res_serializer_->limit(res_buffer_limit_.value());
+        }
+
+
         {
           boost::system::error_code read_body_err;
           boost::system::error_code write_headers_err;
@@ -368,6 +386,10 @@ private:
   std::unique_ptr<response_serializer> res_serializer_;
 
   service_list services_;
+
+  std::optional<size_t> req_headers_limit_;
+  std::optional<size_t> req_body_limit_;
+  std::optional<size_t> res_buffer_limit_;
 };
 
 
@@ -385,14 +407,20 @@ public:
   using session_pool = std::list<session_ptr>;
 
 
-  server_impl(asio::io_context &   io_context,
-              endpoint             ep,
-              service_factory_list factories,
-              size_t               max_session_count)
+  server_impl(asio::io_context &    io_context,
+              endpoint              ep,
+              service_factory_list  factories,
+              std::optional<size_t> max_session_count,
+              std::optional<size_t> req_headers_limit,
+              std::optional<size_t> req_body_limit,
+              std::optional<size_t> res_buffer_limit)
       : io_context_{io_context}
       , acceptor_{io_context}
       , service_factories_{factories}
-      , max_session_count_{max_session_count} {
+      , max_session_count_{max_session_count}
+      , req_headers_limit_{req_headers_limit}
+      , req_body_limit_{req_body_limit}
+      , res_buffer_limit_{res_buffer_limit} {
     LOG_TRACE("construct sever");
 
     tcp protocol = ep.protocol();
@@ -463,9 +491,10 @@ private:
           });
 
 
-          if (max_session_count_ && sessions_.size() >= max_session_count_) {
+          if (max_session_count_.has_value() &&
+              sessions_.size() >= max_session_count_) {
             LOG_WARNING("maximum session count exceeded: %1%",
-                        max_session_count_);
+                        max_session_count_.value());
             sock.shutdown(socket::shutdown_both, err);
             if (err.failed()) {
               LOG_ERROR(err.message());
@@ -488,7 +517,11 @@ private:
 
 
           session_ptr session =
-              std::make_shared<restpp::session>(std::move(sock), services);
+              std::make_shared<restpp::session>(std::move(sock),
+                                                services,
+                                                req_headers_limit_,
+                                                req_body_limit_,
+                                                res_buffer_limit_);
 
 
           session->start();
@@ -511,8 +544,12 @@ private:
   std::string          root_path_;
   service_factory_list service_factories_;
 
-  session_pool sessions_;
-  size_t       max_session_count_;
+  session_pool          sessions_;
+  std::optional<size_t> max_session_count_;
+
+  std::optional<size_t> req_headers_limit_;
+  std::optional<size_t> req_body_limit_;
+  std::optional<size_t> res_buffer_limit_;
 };
 
 
@@ -529,8 +566,7 @@ server &server::stop() {
 
 
 server_builder::server_builder(asio::io_context &io_context)
-    : io_context_{io_context}
-    , max_session_count_{0} {
+    : io_context_{io_context} {
 }
 
 server_builder &server_builder::set_uri(std::string_view root) {
@@ -545,7 +581,27 @@ server_builder &server_builder::add_service(service_factory_ptr factory,
 }
 
 server_builder &server_builder::set_max_session_count(size_t count) {
-  max_session_count_ = count;
+  if (count != 0) {
+    max_session_count_ = count;
+  } else {
+    max_session_count_.reset();
+  }
+  return *this;
+}
+
+
+server_builder &server_builder::set_req_headers_limit(size_t limit) {
+  req_headers_limit_ = limit;
+  return *this;
+}
+
+server_builder &server_builder::set_req_body_limit(size_t limit) {
+  req_body_limit_ = limit;
+  return *this;
+}
+
+server_builder &server_builder::set_res_buffer_limit(size_t limit) {
+  res_buffer_limit_ = limit;
   return *this;
 }
 
@@ -584,11 +640,15 @@ server server_builder::build() const {
     service_factories.emplace_back(root_path / relative_path, factory);
   }
 
+
   std::shared_ptr<server_impl> impl =
       std::make_shared<server_impl>(io_context_,
                                     endpoint,
                                     service_factories,
-                                    max_session_count_);
+                                    max_session_count_,
+                                    req_headers_limit_,
+                                    req_body_limit_,
+                                    res_buffer_limit_);
 
 
   server retval{};
