@@ -16,6 +16,7 @@ class request
     : public boost::beast::http::request<boost::beast::http::string_body> {
   friend session;
   using message = boost::beast::http::request<boost::beast::http::string_body>;
+  using read_body_callback = std::function<message::body_type::value_type()>;
 
 public:
   request(const message &rhs)
@@ -38,15 +39,10 @@ public:
 
   /**\brief synchronously read request body
    * \note that before getting body from request you need call this metod
-   * \warning you can call it only once!
+   * \warning you need call it only once
    */
   void read_body() {
-    if (read_body_callback_ == nullptr) {
-      throw std::runtime_error{"second call of read body callback"};
-    }
-
-    message::operator   =(read_body_callback_());
-    read_body_callback_ = nullptr;
+    body() = read_body_callback_();
   }
 
   std::string_view target() const noexcept {
@@ -65,7 +61,7 @@ protected:
   using message::target;
 
 private:
-  std::function<request::message()> read_body_callback_;
-  std::string                       root_;
+  read_body_callback read_body_callback_;
+  std::string        root_;
 };
 } // namespace restpp::http

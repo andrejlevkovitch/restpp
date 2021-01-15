@@ -155,6 +155,8 @@ private:
         req_parser_ = std::make_unique<request_parser>();
 
 
+        LOG_TRACE("try read request headers");
+
         yield beast::http::async_read_header(
             socket_,
             req_buffer_,
@@ -174,38 +176,70 @@ private:
         res_            = std::make_unique<http::response>();
         res_serializer_ = std::make_unique<response_serializer>(*res_);
         {
+          boost::system::error_code read_body_err;
+          boost::system::error_code write_headers_err;
+          boost::system::error_code write_body_err;
+
           // read body callback
-          auto read_body_callback = [this]() {
-            if (req_parser_->is_done()) {
-              return req_parser_->get(); // nothing to read
-            }
+          auto read_body_callback = [this, &read_body_err]() {
+            if (req_parser_->is_done() == false) {
+              LOG_TRACE("try read request body by callback");
 
-            size_t trans =
-                beast::http::read(socket_, req_buffer_, *req_parser_);
+              size_t trans = beast::http::read(socket_,
+                                               req_buffer_,
+                                               *req_parser_,
+                                               read_body_err);
+              if (read_body_err.failed()) {
+                LOG_ERROR("error while reading body: %1%",
+                          read_body_err.message());
 
-            LOG_DEBUG("readed body: %1.3fKb", trans / 1024.);
+                throw boost::system::system_error{read_body_err};
+              }
 
-            return req_parser_->get();
+              LOG_DEBUG("readed body: %1.3fKb", trans / 1024.);
+            } // else nothing to call
+
+
+            return req_parser_->get().body();
           };
 
           // write headers callback
-          auto write_headers_callback = [this]() {
-            if (res_serializer_->is_done()) {
+          auto write_headers_callback = [this, &write_headers_err]() {
+            if (res_serializer_->is_header_done()) {
               return; // nothing to write
             }
 
-            size_t trans = beast::http::write_header(socket_, *res_serializer_);
+            LOG_TRACE("try write response headers by callback");
+
+            size_t trans = beast::http::write_header(socket_,
+                                                     *res_serializer_,
+                                                     write_headers_err);
+            if (write_headers_err.failed()) {
+              LOG_ERROR("error while writing headers: %1%",
+                        write_headers_err.message());
+
+              throw boost::system::system_error{write_headers_err};
+            }
 
             LOG_DEBUG("writed headers: %1.3fKb", trans / 1024.);
           };
-          auto write_callback = [this]() {
+          auto write_callback = [this, &write_body_err]() {
             if (res_serializer_->is_done()) {
               return; // nothing to write
             }
 
-            size_t trans = beast::http::write(socket_, *res_serializer_);
+            LOG_TRACE("try write request by callback");
 
-            LOG_DEBUG("writed body: %1.3fKb", trans / 1024.);
+            size_t trans =
+                beast::http::write(socket_, *res_serializer_, write_body_err);
+            if (write_body_err.failed()) {
+              LOG_ERROR("error while writing response: %1%",
+                        write_body_err.message());
+
+              throw boost::system::system_error{write_body_err};
+            }
+
+            LOG_DEBUG("writed response: %1.3fKb", trans / 1024.);
           };
 
 
@@ -248,6 +282,8 @@ private:
 
           // handle request
           try {
+            LOG_TRACE("try handle request by service");
+
             service->handle(req, *res_);
           } catch (std::exception &e) {
             LOG_ERROR("catch exception from service: %1%", e.what());
@@ -255,6 +291,17 @@ private:
             service->exception(req, *res_, e);
           }
 
+          // at handling service we need check read and write callbacks on
+          // errors
+          if (read_body_err.failed()) {
+            return this->operator()(std::move(self_), read_body_err, 0);
+          }
+          if (write_headers_err.failed()) {
+            return this->operator()(std::move(self_), write_headers_err, 0);
+          }
+          if (write_body_err.failed()) {
+            return this->operator()(std::move(self_), write_body_err, 0);
+          }
 
         PreWriting:
           if (res_serializer_->split() == false) {
@@ -264,6 +311,8 @@ private:
           }
         }
 
+
+        LOG_TRACE("try write request");
 
         yield beast::http::async_write(
             socket_,
@@ -289,7 +338,7 @@ private:
 
         // skip request body if it was set and didn't read
         if (req_parser_->is_done() == false) {
-          LOG_DEBUG("skip request body");
+          LOG_TRACE("skip request body");
 
           yield beast::http::async_read(
               socket_,
@@ -301,6 +350,8 @@ private:
                                             std::move(self_),
                                             std::placeholders::_1,
                                             std::placeholders::_2)));
+
+          LOG_DEBUG("skip request body: %1.3fKb", transfered / 1024.);
         }
       }
     }
