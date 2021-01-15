@@ -12,6 +12,7 @@
 #include <boost/asio/coroutine.hpp>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/strand.hpp>
+#include <boost/asio/version.hpp>
 #include <boost/beast/core/flat_buffer.hpp>
 #include <boost/beast/http/parser.hpp>
 #include <boost/beast/http/read.hpp>
@@ -45,15 +46,25 @@ public:
   using request_parser = beast::http::request_parser<beast::http::string_body>;
   using response_serializer =
       beast::http::response_serializer<beast::http::string_body>;
-  using strand       = asio::strand<asio::io_context::executor_type>;
   using service_list = std::list<std::pair<http::url::path, service_ptr>>;
+
+  using strand = asio::strand<socket::executor_type>;
 
 
   session(socket sock, service_list services) noexcept
-      : socket_{std::move(sock)}
-      , strand_{sock.get_executor()}
-      , is_open_{true}
-      , services_{services} {
+      : socket_ {
+    std::move(sock)
+  }
+#if BOOST_ASIO_VERSION >= 101400
+  , strand_ {
+    asio::make_strand(sock.get_executor())
+  }
+#else
+  , strand_ {
+    sock.get_executor()
+  }
+#endif
+  , is_open_{true}, services_{services} {
     LOG_TRACE("construct session");
   }
 
@@ -318,10 +329,10 @@ public:
   using endpoint    = tcp::endpoint;
   using socket      = asio::basic_stream_socket<tcp>;
   using acceptor    = asio::basic_socket_acceptor<tcp>;
-  using strand      = asio::strand<asio::io_context::executor_type>;
   using service_factory_list =
       std::list<std::pair<std::string, service_factory_ptr>>;
   using session_pool = std::list<session_ptr>;
+
 
   server_impl(asio::io_context &   io_context,
               endpoint             ep,
@@ -338,8 +349,6 @@ public:
     acceptor_.set_option(typename acceptor::reuse_address(true));
     acceptor_.bind(ep);
     acceptor_.listen(socket::max_listen_connections);
-
-    strand_ptr_ = std::make_unique<strand>(acceptor_.get_executor());
   }
 
   void start_accepting() noexcept {
@@ -384,13 +393,11 @@ private:
 
     reenter(this) {
       for (;;) {
-        yield acceptor_.async_accept(
-            asio::bind_executor(*strand_ptr_,
-                                std::bind(&server_impl::operator(),
-                                          this,
-                                          std::move(self_),
-                                          std::placeholders::_1,
-                                          std::placeholders::_2)));
+        yield acceptor_.async_accept(std::bind(&server_impl::operator(),
+                                               this,
+                                               std::move(self_),
+                                               std::placeholders::_1,
+                                               std::placeholders::_2));
 
         LOG_DEBUG("accept new connection");
         try {
@@ -448,11 +455,10 @@ private:
 
 
 private:
-  asio::io_context &      io_context_;
-  std::unique_ptr<strand> strand_ptr_;
-  acceptor                acceptor_;
-  std::string             root_path_;
-  service_factory_list    service_factories_;
+  asio::io_context &   io_context_;
+  acceptor             acceptor_;
+  std::string          root_path_;
+  service_factory_list service_factories_;
 
   session_pool sessions_;
   size_t       max_session_count_;
