@@ -112,7 +112,7 @@ public:
 
   /**\note all async operations with socket must be already canceled
    */
-  void atClose() noexcept {
+  void at_close() noexcept {
     LOG_TRACE("at session close");
 
     is_open_ = false;
@@ -133,7 +133,7 @@ public:
     }
   }
 
-  bool isOpen() const noexcept {
+  bool is_open() const noexcept {
     return is_open_;
   }
 
@@ -148,7 +148,7 @@ private:
         LOG_ERROR(err.message());
       }
 
-      this->atClose();
+      this->at_close();
 
       LOG_DEBUG("end of session coroutine");
       return;
@@ -448,7 +448,7 @@ public:
     LOG_TRACE("close all sessions");
 
     for (session_ptr &session : sessions_) {
-      if (session->isOpen()) {
+      if (session->is_open()) {
         session->close();
       }
     }
@@ -484,7 +484,7 @@ private:
 
           // at first remove already closed sessions
           sessions_.remove_if([](const session_ptr &session) {
-            if (session->isOpen() == false) {
+            if (session->is_open() == false) {
               return true;
             }
             return false;
