@@ -3,6 +3,7 @@
 #include "restpp/http.hpp"
 #include "restpp/server.hpp"
 #include "restpp/service.hpp"
+#include "stats_service.hpp"
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/signal_set.hpp>
 #include <boost/program_options/options_description.hpp>
@@ -38,57 +39,6 @@ void sigsegv_handler([[maybe_unused]] int signal) {
 
 namespace http = restpp::http;
 namespace asio = boost::asio;
-
-
-class stats_service final : public restpp::service {
-public:
-  void handle(http::request &req, http::response &res) override {
-    if (req.method() != http::verb::get && req.relative() != "/") {
-      res.result(http::status::not_found);
-    }
-
-    auto [lock, stats] = get_stats();
-
-    std::stringstream ss;
-    size_t            total = 0;
-    for (const auto &[target, count] : stats) {
-      ss << target << '\t' << count << std::endl;
-      total += count;
-    }
-    ss << "  total:\t" << total << std::endl;
-
-    res.body() = ss.str();
-  }
-
-  static void increment(std::string_view target) {
-    auto [lock, stats] = get_stats();
-    stats[std::string(target)]++;
-  }
-
-  static void increment(const http::request &req) {
-    http::url::path absolute_path{http::url::get_path(req.target())};
-    stats_service::increment(std::string{req.method_string()} + "\t" +
-                             std::string{absolute_path});
-  }
-
-private:
-  static std::pair<std::unique_lock<std::mutex>,
-                   std::unordered_map<std::string, int> &>
-  get_stats() {
-    static std::mutex                           mutex_;
-    static std::unordered_map<std::string, int> calls_;
-
-    return std::make_pair(std::unique_lock<std::mutex>{mutex_},
-                          std::ref(calls_));
-  }
-};
-
-class stats_service_factory : public restpp::service_factory {
-public:
-  restpp::service_ptr make_service() override {
-    return std::make_shared<stats_service>();
-  }
-};
 
 
 class echo_service final : public restpp::service {

@@ -48,7 +48,7 @@ target_link_libraries(${PROJECT_NAME} PUBLIC
   )
 
 
-add_executable(echo_service example/main.cpp)
+add_executable(echo_service example/main.cpp example/stats_service.cpp)
 target_link_libraries(echo_service PRIVATE
   ${PROJECT_NAME}
   ${Boost_LIBRARIES}
