@@ -11,6 +11,7 @@
 #include <boost/asio/bind_executor.hpp>
 #include <boost/asio/coroutine.hpp>
 #include <boost/asio/ip/tcp.hpp>
+#include <boost/asio/steady_timer.hpp>
 #include <boost/asio/strand.hpp>
 #include <boost/asio/version.hpp>
 #include <boost/beast/core/flat_buffer.hpp>
@@ -26,6 +27,9 @@
 
 // XXX must be after <thread>
 #include <boost/asio/yield.hpp>
+
+
+#define WAIT_SESSION_CLOSE_SECONDS 1
 
 
 namespace restpp {
@@ -150,7 +154,7 @@ private:
 
       this->at_close();
 
-      LOG_DEBUG("end of session coroutine");
+      LOG_TRACE("end of session coroutine");
       return;
     }
 
@@ -466,7 +470,7 @@ private:
         LOG_ERROR(err.message());
       }
 
-      LOG_DEBUG("break the server coroutine");
+      LOG_TRACE("break the server coroutine");
       return;
     }
 
@@ -478,7 +482,7 @@ private:
                                                std::placeholders::_1,
                                                std::placeholders::_2));
 
-        LOG_DEBUG("accept new connection");
+        LOG_TRACE("accept new connection");
         try {
           LOG_DEBUG("accept connection from: %1%", sock.remote_endpoint());
 
@@ -489,24 +493,6 @@ private:
             }
             return false;
           });
-
-
-          if (max_session_count_.has_value() &&
-              sessions_.size() >= max_session_count_) {
-            LOG_WARNING("maximum session count exceeded: %1%",
-                        max_session_count_.value());
-            sock.shutdown(socket::shutdown_both, err);
-            if (err.failed()) {
-              LOG_ERROR(err.message());
-            }
-
-            sock.close(err);
-            if (err.failed()) {
-              LOG_ERROR(err.message());
-            }
-
-            continue;
-          }
 
 
           session::service_list services;
@@ -533,8 +519,48 @@ private:
           LOG_ERROR("catch expetion at session start: %1%", e.what());
           LOG_ERROR(e.what());
         }
+
+
+        if (max_session_count_.has_value() &&
+            sessions_.size() >= max_session_count_) {
+          LOG_TRACE("reach sessions limit and stop accepting");
+
+          acceptor_.cancel();
+
+          yield wait_for_session_close(
+              self_,
+              std::make_shared<asio::steady_timer>(
+                  this->io_context_,
+                  std::chrono::seconds{WAIT_SESSION_CLOSE_SECONDS}));
+        }
       }
     }
+  }
+
+  void wait_for_session_close(self                                self_,
+                              std::shared_ptr<asio::steady_timer> timer) {
+    // at first remove already closed sessions
+    sessions_.remove_if([](const session_ptr &session) {
+      if (session->is_open() == false) {
+        return true;
+      }
+      return false;
+    });
+
+    if (sessions_.size() < max_session_count_) {
+      LOG_TRACE("restart accepting");
+
+      this->operator()(std::move(self_),
+                       error_code{},
+                       socket{this->io_context_});
+
+      return;
+    }
+
+    timer->async_wait(std::bind(&server_impl::wait_for_session_close,
+                                this,
+                                std::move(self_),
+                                std::move(timer)));
   }
 
 
