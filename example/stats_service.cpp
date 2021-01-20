@@ -3,6 +3,7 @@
 #include "stats_service.hpp"
 #include <mutex>
 #include <restpp/http.hpp>
+#include <sstream>
 #include <unordered_map>
 
 
