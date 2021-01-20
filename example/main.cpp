@@ -138,13 +138,6 @@ private:
   handlers handlers_;
 };
 
-class echo_service_factory final : public restpp::service_factory {
-public:
-  restpp::service_ptr make_service() {
-    return std::make_shared<echo_service>();
-  }
-};
-
 
 class say_service final : public restpp::service {
 public:
@@ -167,12 +160,9 @@ public:
   }
 };
 
-class say_service_factory final : public restpp::service_factory {
-public:
-  restpp::service_ptr make_service() {
-    return std::make_shared<say_service>();
-  }
-};
+
+ADD_DEFAULT_FACTORY(echo_service);
+ADD_DEFAULT_FACTORY(say_service);
 
 
 int main(int argc, char *argv[]) {
@@ -243,10 +233,9 @@ int main(int argc, char *argv[]) {
   restpp::server_builder server_builder{io_context};
   server_builder.set_max_session_count(max_session_count);
   server_builder.set_uri(server_uri);
-  server_builder.add_service(std::make_shared<echo_service_factory>(), "/echo");
-  server_builder.add_service(std::make_shared<say_service_factory>(), "/say");
-  server_builder.add_service(std::make_shared<stats_service_factory>(),
-                             "/stats");
+  server_builder.add_service(GET_DEFAULT_FACTORY(echo_service), "/echo");
+  server_builder.add_service(GET_DEFAULT_FACTORY(say_service), "/say");
+  server_builder.add_service(GET_DEFAULT_FACTORY(stats_service), "/stats");
 
   // start the server
   LOG_INFO("start server");

@@ -14,10 +14,4 @@ public:
   static void increment(const restpp::http::request &req);
 };
 
-
-class stats_service_factory : public restpp::service_factory {
-public:
-  restpp::service_ptr make_service() override {
-    return std::make_shared<stats_service>();
-  }
-};
+ADD_DEFAULT_FACTORY(stats_service);

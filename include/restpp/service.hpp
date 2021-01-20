@@ -8,6 +8,25 @@
 #include <restpp/misc.hpp>
 
 
+/**\brief register default factory for service
+ * \param name of service class
+ * \note service must be class name without namespace
+ * \note service must has default constructor
+ * \note use only outside of functions
+ */
+#define ADD_DEFAULT_FACTORY(service)                                           \
+  class service##_factory : public restpp::service_factory {                   \
+    restpp::service_ptr make_service() override {                              \
+      return std::make_unique<service>();                                      \
+    }                                                                          \
+  }
+
+/**\return std::shared_ptr to default service factory
+ * \note service can contains namespace
+ */
+#define GET_DEFAULT_FACTORY(service) std::make_shared<service##_factory>()
+
+
 namespace restpp {
 /**\brief service handles requests for some path
  * \note that service should be lightweight and fast constuctible, because it
